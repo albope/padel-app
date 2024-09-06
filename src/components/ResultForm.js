@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Grid, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
-import { useNavigate } from 'react-router-dom'; // Para la navegación en React Router
-import { db } from '../firebase'; // Subimos un nivel para acceder a firebase.js
+import { useNavigate } from 'react-router-dom';
+import { db } from '../firebase'; // Asegúrate de que la ruta sea correcta
 import { collection, addDoc } from "firebase/firestore"; // Importa las funciones necesarias de Firestore
 
 const players = ["Lucas", "Ricardo", "Martin", "Bort", "Invitado"];
@@ -23,10 +23,13 @@ const ResultForm = () => {
     setSets(updatedSets);
   };
 
-  // Función para guardar los datos en Firestore
+  // Función para guardar los datos reales en Firestore
   const handleSubmit = async () => {
     try {
-      // Añade el resultado a la colección 'results' en Firestore
+      console.log("Intentando guardar el resultado en Firestore...");
+      console.log({ pair1, pair2, sets, date, location }); // Verifica los datos antes de guardar
+
+      // Guardar los datos reales en Firestore
       await addDoc(collection(db, "results"), {
         pair1,
         pair2,
