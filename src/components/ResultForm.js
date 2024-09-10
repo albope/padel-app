@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { TextField, Button, Container, Typography, Grid, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import { TextField, Button, Container, Typography, Grid, Select, MenuItem, InputLabel, FormControl, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../firebase'; // Asegúrate de que la ruta sea correcta
-import { collection, addDoc } from "firebase/firestore"; // Importa las funciones necesarias de Firestore
+import { db } from '../firebase';
+import { collection, addDoc } from "firebase/firestore";
 
 const players = ["Lucas", "Ricardo", "Martin", "Bort", "Invitado"];
 const locations = ["Passing Padel", "Elite Padel 22", "Flow Padel", "Aspresso k7", "Otro"];
@@ -15,7 +15,7 @@ const ResultForm = () => {
   const [date, setDate] = useState('');
   const [location, setLocation] = useState('');
 
-  const navigate = useNavigate(); // Hook para navegar
+  const navigate = useNavigate();
 
   const handleSetChange = (index, pair, value) => {
     const updatedSets = [...sets];
@@ -23,13 +23,8 @@ const ResultForm = () => {
     setSets(updatedSets);
   };
 
-  // Función para guardar los datos reales en Firestore
   const handleSubmit = async () => {
     try {
-      console.log("Intentando guardar el resultado en Firestore...");
-      console.log({ pair1, pair2, sets, date, location }); // Verifica los datos antes de guardar
-
-      // Guardar los datos reales en Firestore
       await addDoc(collection(db, "results"), {
         pair1,
         pair2,
@@ -37,8 +32,7 @@ const ResultForm = () => {
         date,
         location,
       });
-      console.log("Resultado guardado exitosamente");
-      navigate('/'); // Navega a la página principal tras guardar el resultado
+      navigate('/');
     } catch (error) {
       console.error("Error al guardar el resultado:", error);
     }
@@ -51,17 +45,24 @@ const ResultForm = () => {
 
   return (
     <Container>
-      <Typography variant="h5" gutterBottom style={{ marginBottom: '40px' }}>
-        Agregar Resultado
-      </Typography>
+      {/* Encabezado */}
+      <Box
+        sx={{
+          backgroundColor: 'black',
+          color: 'white',
+          padding: '10px',
+          textAlign: 'center',
+          marginTop: '20px',
+        }}
+      >
+        <Typography variant="h5">Agregar Resultado</Typography>
+      </Box>
 
-      {/* Nombres de las parejas */}
-      <Grid container spacing={2}>
+      {/* Formulario de las parejas */}
+      <Grid container spacing={2} style={{ marginTop: '20px' }}>
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true} style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-              Pareja 1 - Jugador 1
-            </InputLabel>
+            <InputLabel shrink={true}>Pareja 1 - Jugador 1</InputLabel>
             <Select
               value={pair1.player1}
               onChange={(e) => setPair1({ ...pair1, player1: e.target.value })}
@@ -75,9 +76,7 @@ const ResultForm = () => {
         </Grid>
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true} style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-              Pareja 1 - Jugador 2
-            </InputLabel>
+            <InputLabel shrink={true}>Pareja 1 - Jugador 2</InputLabel>
             <Select
               value={pair1.player2}
               onChange={(e) => setPair1({ ...pair1, player2: e.target.value })}
@@ -93,9 +92,7 @@ const ResultForm = () => {
         {/* Pareja 2 */}
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true} style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-              Pareja 2 - Jugador 1
-            </InputLabel>
+            <InputLabel shrink={true}>Pareja 2 - Jugador 1</InputLabel>
             <Select
               value={pair2.player1}
               onChange={(e) => setPair2({ ...pair2, player1: e.target.value })}
@@ -109,9 +106,7 @@ const ResultForm = () => {
         </Grid>
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true} style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-              Pareja 2 - Jugador 2
-            </InputLabel>
+            <InputLabel shrink={true}>Pareja 2 - Jugador 2</InputLabel>
             <Select
               value={pair2.player2}
               onChange={(e) => setPair2({ ...pair2, player2: e.target.value })}
@@ -134,15 +129,13 @@ const ResultForm = () => {
             value={date}
             onChange={(e) => setDate(e.target.value)}
             fullWidth
-            InputLabelProps={{
-              shrink: true,
-            }}
-            style={{ marginTop: '16px' }}  // Añadimos espacio entre el título y el input
+            InputLabelProps={{ shrink: true }}
+            style={{ marginTop: '16px' }}
           />
         </Grid>
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginTop: '16px' }}>
-            <InputLabel shrink={true} style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>Lugar</InputLabel>
+            <InputLabel shrink={true}>Lugar</InputLabel>
             <Select
               value={location}
               onChange={(e) => setLocation(e.target.value)}
@@ -156,63 +149,46 @@ const ResultForm = () => {
         </Grid>
       </Grid>
 
-      {/* Sets */}
-      <Typography variant="h6" gutterBottom style={{ marginTop: '20px' }}>Resultados de Sets</Typography>
+      {/* Resultados de sets */}
+      <Typography variant="h6" sx={{ marginTop: '30px', fontWeight: 'bold', color: 'black', textAlign: 'center' }}>
+        Resultados de Sets
+      </Typography>
+      <Grid container spacing={2} style={{ marginBottom: '10px' }}>
+        {sets.map((set, index) => (
+          <React.Fragment key={index}>
+            <Grid item xs={6}>
+              <TextField
+                label={`Set ${index + 1} - Pareja 1`}
+                value={set.pair1Score}
+                onChange={(e) => handleSetChange(index, 'pair1Score', e.target.value)}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                label={`Set ${index + 1} - Pareja 2`}
+                value={set.pair2Score}
+                onChange={(e) => handleSetChange(index, 'pair2Score', e.target.value)}
+                fullWidth
+              />
+            </Grid>
+          </React.Fragment>
+        ))}
+      </Grid>
 
-      {[0, 1].map((setIndex) => (
-        <Grid container spacing={2} key={setIndex} style={{ marginBottom: '10px' }}>
-          <Grid item xs={6}>
-            <TextField
-              label={`Set ${setIndex + 1} - Pareja 1`}
-              value={sets[setIndex].pair1Score}
-              onChange={(e) => handleSetChange(setIndex, 'pair1Score', e.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label={`Set ${setIndex + 1} - Pareja 2`}
-              value={sets[setIndex].pair2Score}
-              onChange={(e) => handleSetChange(setIndex, 'pair2Score', e.target.value)}
-              fullWidth
-            />
-          </Grid>
-        </Grid>
-      ))}
-
-      {/* Mostrar tercer set si es necesario */}
-      {showThirdSet && (
-        <Grid container spacing={2} key={2} style={{ marginBottom: '10px' }}>
-          <Grid item xs={6}>
-            <TextField
-              label={`Set 3 - Pareja 1`}
-              value={sets[2]?.pair1Score}
-              onChange={(e) => handleSetChange(2, 'pair1Score', e.target.value)}
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <TextField
-              label={`Set 3 - Pareja 2`}
-              value={sets[2]?.pair2Score}
-              onChange={(e) => handleSetChange(2, 'pair2Score', e.target.value)}
-              fullWidth
-            />
-          </Grid>
-        </Grid>
-      )}
+      {/* Botón para añadir tercer set */}
+      <Box textAlign="center">
+        <Button 
+          variant="contained" 
+          onClick={addThirdSet}
+          sx={{ backgroundColor: '#800080', color: '#FFFFFF', marginTop: '20px' }}
+        >
+          Añadir Tercer Set
+        </Button>
+      </Box>
 
       {/* Botones */}
       <Grid container spacing={2} style={{ marginTop: '20px' }}>
-        <Grid item>
-          <Button 
-            variant="contained" 
-            onClick={addThirdSet}
-            style={{ backgroundColor: '#800080', color: '#FFFFFF' }}
-          >
-            Añadir Tercer Set
-          </Button>
-        </Grid>
         <Grid item>
           <Button variant="contained" color="primary" onClick={handleSubmit}>
             Guardar Resultado
