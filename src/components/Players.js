@@ -66,6 +66,17 @@ const players = [
   },
 ];
 
+// Función para calcular el ranking basado en partidos ganados y eficiencia
+const calculateRanking = (players) => {
+  return players.sort((a, b) => {
+    const efficiencyDiff = parseFloat(b.efficiency) - parseFloat(a.efficiency);
+    if (efficiencyDiff !== 0) {
+      return efficiencyDiff;
+    }
+    return b.gamesWon - a.gamesWon;
+  });
+};
+
 const Players = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const navigate = useNavigate();
@@ -73,6 +84,8 @@ const Players = () => {
   const handlePlayerClick = (player) => {
     setSelectedPlayer(player === selectedPlayer ? null : player); // Toggle entre mostrar y ocultar detalles
   };
+
+  const rankedPlayers = calculateRanking(players);
 
   return (
     <Container>
@@ -178,6 +191,46 @@ const Players = () => {
                   </Grid>
                 </CardContent>
               )}
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Encabezado de la sección Ranking */}
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
+        <Typography variant="h5">Ranking</Typography>
+      </Box>
+
+      {/* Lista de Ranking */}
+      <Grid container spacing={4} sx={{ marginTop: '20px' }}>
+        {rankedPlayers.map((player, index) => (
+          <Grid item xs={12} key={player.name}>
+            <Card
+              sx={{
+                backgroundColor: '#e0f7fa',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '20px',
+              }}
+            >
+              <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                {index + 1}
+              </Typography>
+              <CardMedia
+                component="img"
+                sx={{ width: '60px', height: '60px', borderRadius: '50%', marginRight: '20px' }}
+                image={player.image}
+                alt={player.name}
+              />
+              <Box>
+                <Typography variant="h6">{player.name}</Typography>
+                <Typography variant="body2">{player.country}</Typography>
+              </Box>
+              <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
+                <Typography variant="body2">
+                  {player.gamesWon} partidos ganados | {player.efficiency} eficacia
+                </Typography>
+              </Box>
             </Card>
           </Grid>
         ))}
