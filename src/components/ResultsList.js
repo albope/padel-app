@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Typography, Container, Grid, Card, CardContent, Box, Button } from '@mui/material';
-import { CheckCircle } from '@mui/icons-material'; // Importa el ícono
+import { CheckCircle } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'; // Importa el ícono de flecha
 
 const ResultsList = () => {
   const [results, setResults] = useState([]);
@@ -146,13 +147,26 @@ const ResultsList = () => {
         </Button>
       </Box>
 
-      {/* Nueva sección "Información de las Partidas" */}
-      <Box sx={{ textAlign: 'center', marginTop: '20px', borderRadius: '10px', backgroundColor: '#f9f9f9', boxShadow: 2 }}>
-        <Button sx={{ padding: '10px', textTransform: 'none', color: 'blue', width: '100%' }} onClick={() => navigate('/info')}>
-          <Typography variant="body1">
-            <strong>Información de las Partidas</strong>
-          </Typography>
-        </Button>
+      {/* Nueva sección "Información de las Partidas" con efecto hover y flecha */}
+      <Box
+        sx={{
+          backgroundColor: 'black',
+          color: 'white',
+          padding: '10px',
+          textAlign: 'center',
+          marginTop: '20px',
+          borderRadius: '10px',
+          '&:hover': {
+            cursor: 'pointer',
+            backgroundColor: '#333', // Cambia el fondo al hacer hover
+          },
+        }}
+        onClick={() => navigate('/info')}
+      >
+        <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Información de las Partidas
+          <ArrowForwardIcon sx={{ marginLeft: '8px' }} /> {/* Flecha indicativa */}
+        </Typography>
       </Box>
     </Container>
   );

@@ -1,7 +1,10 @@
 import React from 'react';
-import { Container, Typography, Box } from '@mui/material';
+import { Container, Typography, Box, Button } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 
 const MatchInfo = () => {
+  const navigate = useNavigate(); // Hook para la navegación
+
   return (
     <Container>
       {/* Encabezado */}
@@ -45,6 +48,26 @@ const MatchInfo = () => {
             loading="lazy"
           ></iframe>
         </Box>
+      </Box>
+
+      {/* Botón para volver a la pantalla principal */}
+      <Box sx={{ textAlign: 'center', marginTop: '30px' }}>
+        <Button
+          variant="contained"
+          sx={{
+            backgroundColor: 'black',
+            color: 'white',
+            borderRadius: '30px',
+            padding: '10px 20px',
+            textTransform: 'none',
+            '&:hover': {
+              backgroundColor: '#333',
+            },
+          }}
+          onClick={() => navigate('/')} // Navega de vuelta a la pantalla principal
+        >
+          Volver a la pantalla principal
+        </Button>
       </Box>
     </Container>
   );
