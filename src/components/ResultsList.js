@@ -4,7 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { Typography, Container, Grid, Card, CardContent, Box, Button } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward'; // Importa el ícono de flecha
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'; // Icono de flecha
 
 const ResultsList = () => {
   const [results, setResults] = useState([]);
@@ -39,16 +39,7 @@ const ResultsList = () => {
 
   return (
     <Container>
-      {/* Encabezado del listado de partidos */}
-      <Box
-        sx={{
-          backgroundColor: 'black',
-          color: 'white',
-          padding: '10px',
-          textAlign: 'center',
-          marginTop: '20px',
-        }}
-      >
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
         <Typography variant="h5">Últimos Partidos</Typography>
       </Box>
 
@@ -57,15 +48,7 @@ const ResultsList = () => {
         {results.length > 0 ? (
           results.map((result) => (
             <Grid item xs={12} key={result.id}>
-              <Card
-                variant="outlined"
-                sx={{
-                  borderRadius: '10px',
-                  boxShadow: 2,
-                  backgroundColor: '#f9f9f9',
-                  padding: '10px',
-                }}
-              >
+              <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px' }}>
                 <CardContent>
                   <Typography variant="h6" color="textSecondary" gutterBottom>
                     {result.date || 'N/A'} - {result.location || 'N/A'}
@@ -102,12 +85,7 @@ const ResultsList = () => {
                     <Grid item xs={4}>
                       {result.sets && result.sets.length > 0 ? (
                         result.sets.map((set, index) => (
-                          <Typography
-                            key={index}
-                            variant="h6"
-                            align="center"
-                            sx={{ borderBottom: index !== result.sets.length - 1 ? '1px solid #ddd' : 'none' }}
-                          >
+                          <Typography key={index} variant="h6" align="center" sx={{ borderBottom: index !== result.sets.length - 1 ? '1px solid #ddd' : 'none' }}>
                             {set.pair1Score || 0} - {set.pair2Score || 0}
                           </Typography>
                         ))
@@ -131,41 +109,26 @@ const ResultsList = () => {
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
         <Button
           variant="contained"
-          sx={{
-            backgroundColor: 'black',
-            color: 'white',
-            borderRadius: '30px',
-            padding: '10px 20px',
-            textTransform: 'none',
-            '&:hover': {
-              backgroundColor: '#333',
-            },
-          }}
+          sx={{ backgroundColor: 'black', color: 'white', borderRadius: '30px', padding: '10px 20px', textTransform: 'none', '&:hover': { backgroundColor: '#333' } }}
           onClick={() => navigate('/add-result')}
         >
           + Añadir Resultado
         </Button>
       </Box>
 
-      {/* Nueva sección "Información de las Partidas" con efecto hover y flecha */}
-      <Box
-        sx={{
-          backgroundColor: 'black',
-          color: 'white',
-          padding: '10px',
-          textAlign: 'center',
-          marginTop: '20px',
-          borderRadius: '10px',
-          '&:hover': {
-            cursor: 'pointer',
-            backgroundColor: '#333', // Cambia el fondo al hacer hover
-          },
-        }}
-        onClick={() => navigate('/info')}
-      >
+      {/* Nueva sección "Información de las Partidas" */}
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', '&:hover': { cursor: 'pointer', backgroundColor: '#333' } }} onClick={() => navigate('/info')}>
         <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           Información de las Partidas
-          <ArrowForwardIcon sx={{ marginLeft: '8px' }} /> {/* Flecha indicativa */}
+          <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
+        </Typography>
+      </Box>
+
+      {/* Nueva sección "Jugadores" */}
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', '&:hover': { cursor: 'pointer', backgroundColor: '#333' } }} onClick={() => navigate('/players')}>
+        <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Jugadores
+          <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
         </Typography>
       </Box>
     </Container>
