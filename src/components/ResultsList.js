@@ -145,6 +145,15 @@ const ResultsList = () => {
           + Añadir Resultado
         </Button>
       </Box>
+
+      {/* Nueva sección "Información de las Partidas" */}
+      <Box sx={{ textAlign: 'center', marginTop: '20px', borderRadius: '10px', backgroundColor: '#f9f9f9', boxShadow: 2 }}>
+        <Button sx={{ padding: '10px', textTransform: 'none', color: 'blue', width: '100%' }} onClick={() => navigate('/info')}>
+          <Typography variant="body1">
+            <strong>Información de las Partidas</strong>
+          </Typography>
+        </Button>
+      </Box>
     </Container>
   );
 };
