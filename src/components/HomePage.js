@@ -12,6 +12,7 @@ const HomePage = () => {
           color: 'black', // Texto en negro
           padding: '20px',
           textAlign: 'center',
+          fontFamily: '"Oswald", sans-serif', // Nueva fuente
         }}
       >
         <Typography variant="h4" component="h1">

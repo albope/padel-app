@@ -15,8 +15,9 @@ const MatchInfo = () => {
       {/* Información de la partida de los martes */}
       <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Partida del Martes</strong></Typography>
-        <Typography variant="body1">Fecha: Martes, 20:30 - 22:00</Typography>
+        <Typography variant="body1">Fecha: Martes, <strong>20:30 - 22:00</strong></Typography>
         <Typography variant="body1">Lugar: Padel Elite 22</Typography>
+        <Typography variant="body1">Teléfono: <strong>699 34 90 79</strong></Typography>
 
         {/* Google Maps embebido */}
         <Box sx={{ marginTop: '10px' }}>
@@ -34,8 +35,9 @@ const MatchInfo = () => {
       {/* Información de la partida de los jueves */}
       <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Partida del Jueves</strong></Typography>
-        <Typography variant="body1">Fecha: Jueves, 19:30 - 21:00</Typography>
+        <Typography variant="body1">Fecha: Jueves, <strong>19:30 - 21:00</strong></Typography>
         <Typography variant="body1">Lugar: Passing Padel</Typography>
+        <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
 
         {/* Google Maps embebido */}
         <Box sx={{ marginTop: '10px' }}>
