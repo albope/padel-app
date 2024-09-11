@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Grid, Card, CardContent, CardMedia, Button } from '@mui/material';
+import { collection, getDocs } from "firebase/firestore";
+import { db } from '../firebase';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import RemoveIcon from '@mui/icons-material/Remove'; // Línea horizontal para la posición sin cambio
+import RemoveIcon from '@mui/icons-material/Remove';
 import { useNavigate } from 'react-router-dom';
 
-// Información de los jugadores
-const players = [
-  {
+// Información estática de los jugadores
+const playersInfo = {
+  Ricardo: {
     name: 'Ricardo',
     image: '/Ricardo.jpg',
     position: 'Right',
@@ -16,15 +18,9 @@ const players = [
     birthPlace: 'Sevilla',
     country: 'ESP',
     flag: '/spain_flag.jpg',
-    gamesPlayed: 50,
-    gamesWon: 35,
-    gamesLost: 15,
-    consecutiveWins: 5,
-    efficiency: '70%',
-    previousRank: 3,
   },
-  {
-    name: 'Alberto',
+  Bort: {
+    name: 'Bort',
     image: '/Alberto.jpg',
     position: 'Left',
     birthDate: '22/11/1992',
@@ -32,14 +28,8 @@ const players = [
     birthPlace: 'Valencia',
     country: 'ESP',
     flag: '/spain_flag.jpg',
-    gamesPlayed: 45,
-    gamesWon: 30,
-    gamesLost: 15,
-    consecutiveWins: 4,
-    efficiency: '66.6%',
-    previousRank: 2,
   },
-  {
+  Lucas: {
     name: 'Lucas',
     image: '/Lucas.jpg',
     position: 'Right',
@@ -48,14 +38,8 @@ const players = [
     birthPlace: 'Madrid',
     country: 'ESP',
     flag: '/spain_flag.jpg',
-    gamesPlayed: 48,
-    gamesWon: 34,
-    gamesLost: 14,
-    consecutiveWins: 3,
-    efficiency: '70.83%',
-    previousRank: 1,
   },
-  {
+  Martin: {
     name: 'Martin',
     image: '/Martin.jpg',
     position: 'Left',
@@ -64,38 +48,8 @@ const players = [
     birthPlace: 'Barcelona',
     country: 'ESP',
     flag: '/spain_flag.jpg',
-    gamesPlayed: 52,
-    gamesWon: 38,
-    gamesLost: 14,
-    consecutiveWins: 6,
-    efficiency: '73%',
-    previousRank: 4,
   },
-];
-
-// Información de las parejas
-const pairs = [
-  {
-    players: ['Ricardo', 'Alberto'],
-    gamesWon: 25,
-    efficiency: '60%',
-  },
-  {
-    players: ['Lucas', 'Martin'],
-    gamesWon: 32,
-    efficiency: '66.7%',
-  },
-  {
-    players: ['Ricardo', 'Lucas'],
-    gamesWon: 15,
-    efficiency: '50%',
-  },
-  {
-    players: ['Martin', 'Alberto'],
-    gamesWon: 20,
-    efficiency: '55%',
-  },
-];
+};
 
 // Función para calcular el ranking basado en partidos ganados y eficacia
 const calculateRanking = (players) => {
@@ -130,15 +84,108 @@ const getRankingChangeIcon = (currentRank, previousRank) => {
 };
 
 const Players = () => {
+  const [results, setResults] = useState([]);
+  const [playerStats, setPlayerStats] = useState({});
+  const [pairStats, setPairStats] = useState({});
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const navigate = useNavigate();
 
-  const handlePlayerClick = (player) => {
-    setSelectedPlayer(player === selectedPlayer ? null : player); // Toggle entre mostrar y ocultar detalles
+  useEffect(() => {
+    const fetchResults = async () => {
+      const querySnapshot = await getDocs(collection(db, "results"));
+      const fetchedResults = querySnapshot.docs.map(doc => doc.data());
+      setResults(fetchedResults);
+      calculateStats(fetchedResults);
+    };
+
+    fetchResults();
+  }, []);
+
+  const calculateStats = (results) => {
+    const stats = {};
+    const pairStats = {};
+
+    results.forEach(result => {
+      const { pair1, pair2, sets } = result;
+
+      // Actualizar estadísticas de cada jugador
+      [pair1.player1, pair1.player2, pair2.player1, pair2.player2].forEach(player => {
+        if (!stats[player]) {
+          stats[player] = { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
+        }
+        stats[player].gamesPlayed += 1;
+      });
+
+      // Determinar quién ganó según los sets
+      let pair1Wins = 0;
+      let pair2Wins = 0;
+
+      sets.forEach(set => {
+        if (set.pair1Score > set.pair2Score) {
+          pair1Wins += 1;
+        } else {
+          pair2Wins += 1;
+        }
+      });
+
+      // Actualizar las victorias y derrotas
+      if (pair1Wins > pair2Wins) {
+        stats[pair1.player1].gamesWon += 1;
+        stats[pair1.player2].gamesWon += 1;
+        stats[pair2.player1].gamesLost += 1;
+        stats[pair2.player2].gamesLost += 1;
+      } else {
+        stats[pair2.player1].gamesWon += 1;
+        stats[pair2.player2].gamesWon += 1;
+        stats[pair1.player1].gamesLost += 1;
+        stats[pair1.player2].gamesLost += 1;
+      }
+
+      // Actualizar estadísticas de la pareja
+      const pairKey1 = `${pair1.player1}-${pair1.player2}`;
+      const pairKey2 = `${pair2.player1}-${pair2.player2}`;
+
+      if (!pairStats[pairKey1]) {
+        pairStats[pairKey1] = { gamesWon: 0, efficiency: 0, gamesPlayed: 0 };
+      }
+      if (!pairStats[pairKey2]) {
+        pairStats[pairKey2] = { gamesWon: 0, efficiency: 0, gamesPlayed: 0 };
+      }
+
+      pairStats[pairKey1].gamesPlayed += 1;
+      pairStats[pairKey2].gamesPlayed += 1;
+
+      if (pair1Wins > pair2Wins) {
+        pairStats[pairKey1].gamesWon += 1;
+      } else {
+        pairStats[pairKey2].gamesWon += 1;
+      }
+    });
+
+    // Calcular eficacia para cada jugador y pareja
+    Object.keys(stats).forEach(player => {
+      const { gamesWon, gamesPlayed } = stats[player];
+      stats[player].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
+    });
+
+    Object.keys(pairStats).forEach(pair => {
+      const { gamesWon, gamesPlayed } = pairStats[pair];
+      pairStats[pair].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
+    });
+
+    setPlayerStats(stats);
+    setPairStats(pairStats);
   };
 
-  const rankedPlayers = calculateRanking(players);
-  const rankedPairs = calculatePairRanking(pairs); // Ranking de parejas
+  const rankedPlayers = calculateRanking(Object.keys(playerStats).map(player => ({
+    ...playersInfo[player],
+    ...playerStats[player],
+  })));
+
+  const rankedPairs = calculatePairRanking(Object.keys(pairStats).map(pair => ({
+    players: pair.split('-'),
+    ...pairStats[pair],
+  })));
 
   return (
     <Container>
@@ -149,10 +196,13 @@ const Players = () => {
 
       {/* Lista de jugadores */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
-        {players.map((player) => (
+        {rankedPlayers.map((player) => (
           <Grid item xs={12} sm={6} md={3} key={player.name}>
             <Card
-              onClick={() => handlePlayerClick(player)}
+              onClick={() => {
+                console.log('Card clicked:', player.name);
+                setSelectedPlayer(selectedPlayer?.name === player.name ? null : player);
+              }}
               sx={{
                 position: 'relative',
                 '&:hover': { boxShadow: 6, cursor: 'pointer' },
@@ -168,13 +218,15 @@ const Players = () => {
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
+                  cursor: 'pointer',
+                  backgroundColor: selectedPlayer?.name === player.name ? '#f5f5f5' : 'transparent',
+                }}
+                onClick={() => {
+                  console.log('CardContent clicked:', player.name);
+                  setSelectedPlayer(selectedPlayer?.name === player.name ? null : player);
                 }}
               >
-                <Typography
-                  variant="h6"
-                  gutterBottom
-                  sx={{ '&:hover': { color: 'blue' } }} // Efecto hover para destacar el nombre
-                >
+                <Typography variant="h6" gutterBottom sx={{ '&:hover': { color: 'blue' } }}>
                   {player.name}
                 </Typography>
                 <Box
@@ -188,18 +240,14 @@ const Players = () => {
                     backgroundColor: '#f0f0f0',
                   }}
                 >
-                  <img
-                    src={player.flag}
-                    alt={`${player.country} flag`}
-                    style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }}
-                  />
+                  <img src={player.flag} alt={`${player.country} flag`} style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }} />
                   <Typography variant="body2">{player.country}</Typography>
                 </Box>
-                <ArrowDropDownIcon sx={{ marginLeft: '5px' }} /> {/* Ícono de flecha */}
+                <ArrowDropDownIcon sx={{ marginLeft: '5px' }} />
               </CardContent>
 
               {/* Mostrar detalles al hacer clic */}
-              {selectedPlayer === player && (
+              {selectedPlayer?.name === player.name && (
                 <CardContent>
                   <Typography variant="body2">
                     Posición: {player.position} <br />
@@ -235,7 +283,7 @@ const Players = () => {
                     </Grid>
                     <Grid item xs={12}>
                       <Typography variant="h6" sx={{ fontSize: '24px', fontWeight: 'bold' }}>
-                        {player.efficiency}
+                        {player.efficiency}%
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Eficacia
@@ -257,7 +305,7 @@ const Players = () => {
       {/* Lista de Ranking Individual */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPlayers.map((player, index) => (
-          <Grid item xs={12} key={player.name}>
+          <Grid item xs={12} key={`${player.name}-${index}`}>
             <Card
               sx={{
                 backgroundColor: '#e0f7fa',
@@ -282,10 +330,9 @@ const Players = () => {
               <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <Typography variant="body2">
                   {player.gamesWon} partidos ganados |
-                  <span style={{ fontWeight: 'bold' }}>{player.efficiency}</span> eficacia
+                  <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
                 </Typography>
               </Box>
-              {/* Icono para el cambio de posición */}
               <Box sx={{ marginLeft: '20px' }}>
                 {getRankingChangeIcon(index + 1, player.previousRank)}
               </Box>
@@ -302,7 +349,7 @@ const Players = () => {
       {/* Lista de Ranking por Pareja */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPairs.map((pair, index) => (
-          <Grid item xs={12} key={index}>
+          <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
             <Card
               sx={{
                 backgroundColor: '#e0f7fa',
@@ -319,7 +366,7 @@ const Players = () => {
                   {pair.players[0]} & {pair.players[1]}
                 </Typography>
                 <Typography variant="body2">
-                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}</span>{' '}
+                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span>{' '}
                   eficacia
                 </Typography>
               </Box>
