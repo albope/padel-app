@@ -141,9 +141,13 @@ const Players = () => {
         stats[pair1.player2].gamesLost += 1;
       }
 
-      // Actualizar estadísticas de la pareja
-      const pairKey1 = `${pair1.player1}-${pair1.player2}`;
-      const pairKey2 = `${pair2.player1}-${pair2.player2}`;
+      // Normalizar el nombre de la pareja (ordenar alfabéticamente los nombres)
+      const normalizePairKey = (player1, player2) => {
+        return [player1, player2].sort().join('-');
+      };
+
+      const pairKey1 = normalizePairKey(pair1.player1, pair1.player2);
+      const pairKey2 = normalizePairKey(pair2.player1, pair2.player2);
 
       if (!pairStats[pairKey1]) {
         pairStats[pairKey1] = { gamesWon: 0, efficiency: 0, gamesPlayed: 0 };
