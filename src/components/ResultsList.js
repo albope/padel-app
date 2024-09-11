@@ -1,16 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel } from '@mui/material';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs'; // Para manejar fechas
+import { useNavigate } from 'react-router-dom';
 
 const ResultsList = () => {
   const [results, setResults] = useState([]);
   const [filteredResults, setFilteredResults] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(dayjs().month()); // Mes actual
+  const [currentPage, setCurrentPage] = useState(1); // Para paginación
+  const itemsPerPage = 4; // Máximo de partidas por página
   const navigate = useNavigate();
 
   const fetchResults = async () => {
@@ -25,11 +29,15 @@ const ResultsList = () => {
   };
 
   const filterByMonth = (results, month) => {
-    const filtered = results.filter(result => {
-      const resultDate = dayjs(result.date);
-      return resultDate.month() === month;
-    });
+    const filtered = results
+      .filter(result => {
+        const resultDate = dayjs(result.date);
+        return resultDate.month() === month;
+      })
+      .sort((a, b) => dayjs(b.date).diff(dayjs(a.date))); // Ordenar por fecha (más reciente primero)
+
     setFilteredResults(filtered);
+    setCurrentPage(1); // Reiniciar la página al filtrar por mes
   };
 
   const handleMonthChange = (event) => {
@@ -38,9 +46,15 @@ const ResultsList = () => {
     filterByMonth(results, newMonth);
   };
 
-  useEffect(() => {
-    fetchResults();
-  }, []);
+  const handleDeleteResult = async (resultId) => {
+    try {
+      await deleteDoc(doc(db, "results", resultId));
+      setResults(prevResults => prevResults.filter(result => result.id !== resultId));
+      filterByMonth(results.filter(result => result.id !== resultId), currentMonth);
+    } catch (error) {
+      console.error("Error al eliminar el resultado:", error);
+    }
+  };
 
   const isWinner = (pair, sets) => {
     let pair1Wins = 0;
@@ -59,6 +73,27 @@ const ResultsList = () => {
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
+
+  // Paginación
+  const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedResults = filteredResults.slice(startIndex, startIndex + itemsPerPage);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prevPage) => prevPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage((prevPage) => prevPage - 1);
+    }
+  };
+
+  useEffect(() => {
+    fetchResults();
+  }, []);
 
   return (
     <Container>
@@ -87,10 +122,19 @@ const ResultsList = () => {
 
       {/* Lista de partidos */}
       <Grid container spacing={2} sx={{ marginTop: 2 }}>
-        {filteredResults.length > 0 ? (
-          filteredResults.map((result) => (
+        {paginatedResults.length > 0 ? (
+          paginatedResults.map((result) => (
             <Grid item xs={12} key={result.id}>
-              <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px' }}>
+              <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
+                
+                {/* Icono de eliminar */}
+                <IconButton
+                  onClick={() => handleDeleteResult(result.id)}
+                  sx={{ position: 'absolute', top: '10px', right: '10px', color: 'red' }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+
                 <CardContent>
                   <Typography variant="h6" color="textSecondary" gutterBottom>
                     <strong>{dayjs(result.date).format('DD-MM-YYYY')}</strong> - <strong>{result.location || 'N/A'}</strong>
@@ -146,6 +190,27 @@ const ResultsList = () => {
           </Typography>
         )}
       </Grid>
+
+      {/* Paginación */}
+      <Box sx={{ textAlign: 'center', marginTop: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <IconButton
+          onClick={handlePreviousPage}
+          disabled={currentPage <= 1}
+        >
+          <ArrowBackIcon />
+        </IconButton>
+
+        <Typography variant="body1" sx={{ marginLeft: '10px', marginRight: '10px' }}>
+          Página {currentPage} de {totalPages}
+        </Typography>
+
+        <IconButton
+          onClick={handleNextPage}
+          disabled={currentPage >= totalPages}
+        >
+          <ArrowForwardIcon />
+        </IconButton>
+      </Box>
 
       {/* Botón para añadir resultado */}
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
