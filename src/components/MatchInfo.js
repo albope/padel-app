@@ -16,7 +16,7 @@ const MatchInfo = () => {
       <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Partida del Martes</strong></Typography>
         <Typography variant="body1">Fecha: Martes, <strong>20:30 - 22:00</strong></Typography>
-        <Typography variant="body1">Lugar: Padel Elite 22</Typography>
+        <Typography variant="body1">Lugar: <strong>Elite Padel 22</strong></Typography>
         <Typography variant="body1">Teléfono: <strong>699 34 90 79</strong></Typography>
 
         {/* Google Maps embebido */}
@@ -36,7 +36,7 @@ const MatchInfo = () => {
       <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Partida del Jueves</strong></Typography>
         <Typography variant="body1">Fecha: Jueves, <strong>19:30 - 21:00</strong></Typography>
-        <Typography variant="body1">Lugar: Passing Padel</Typography>
+        <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
         <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
 
         {/* Google Maps embebido */}

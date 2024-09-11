@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Grid, Card, CardContent, CardMedia, Button } from '@mui/material';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import { collection, getDocs } from "firebase/firestore";
 import { db } from '../firebase';
-import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import RemoveIcon from '@mui/icons-material/Remove';
 import { useNavigate } from 'react-router-dom';
 
 // Información estática de los jugadores
@@ -71,16 +69,6 @@ const calculatePairRanking = (pairs) => {
     }
     return b.gamesWon - a.gamesWon;
   });
-};
-
-const getRankingChangeIcon = (currentRank, previousRank) => {
-  if (currentRank < previousRank) {
-    return <ArrowDropUpIcon sx={{ color: 'green' }} />;
-  } else if (currentRank > previousRank) {
-    return <ArrowDropDownIcon sx={{ color: 'red' }} />;
-  } else {
-    return <RemoveIcon sx={{ color: 'black' }} />;
-  }
 };
 
 const Players = () => {
@@ -193,12 +181,11 @@ const Players = () => {
 
   return (
     <Container>
-      {/* Encabezado de la página */}
+      {/* Sección de Jugadores */}
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
         <Typography variant="h5">Jugadores</Typography>
       </Box>
 
-      {/* Lista de jugadores */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPlayers.map((player) => (
           <Grid item xs={12} sm={6} md={3} key={player.name}>
@@ -212,10 +199,7 @@ const Players = () => {
                 '&:hover': { boxShadow: 6, cursor: 'pointer' },
               }}
             >
-              {/* Imagen del jugador */}
               <CardMedia component="img" height="200" image={player.image} alt={player.name} />
-
-              {/* Nombre, bandera e ícono de flecha */}
               <CardContent
                 sx={{
                   textAlign: 'center',
@@ -224,10 +208,6 @@ const Players = () => {
                   alignItems: 'center',
                   cursor: 'pointer',
                   backgroundColor: selectedPlayer?.name === player.name ? '#f5f5f5' : 'transparent',
-                }}
-                onClick={() => {
-                  console.log('CardContent clicked:', player.name);
-                  setSelectedPlayer(selectedPlayer?.name === player.name ? null : player);
                 }}
               >
                 <Typography variant="h6" gutterBottom sx={{ '&:hover': { color: 'blue' } }}>
@@ -247,10 +227,8 @@ const Players = () => {
                   <img src={player.flag} alt={`${player.country} flag`} style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }} />
                   <Typography variant="body2">{player.country}</Typography>
                 </Box>
-                <ArrowDropDownIcon sx={{ marginLeft: '5px' }} />
               </CardContent>
 
-              {/* Mostrar detalles al hacer clic */}
               {selectedPlayer?.name === player.name && (
                 <CardContent>
                   <Typography variant="body2">
@@ -259,7 +237,6 @@ const Players = () => {
                     Altura: {player.height} <br />
                     Lugar de nacimiento: {player.birthPlace} <br />
                   </Typography>
-                  {/* Estadísticas visuales */}
                   <Grid container spacing={2} sx={{ marginTop: '10px', textAlign: 'center' }}>
                     <Grid item xs={6}>
                       <Typography variant="h6">{player.gamesPlayed}</Typography>
@@ -301,18 +278,17 @@ const Players = () => {
         ))}
       </Grid>
 
-      {/* Encabezado de la sección Ranking Individual */}
+      {/* Sección Ranking Individual */}
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
         <Typography variant="h5">Ranking Individual</Typography>
       </Box>
 
-      {/* Lista de Ranking Individual */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPlayers.map((player, index) => (
           <Grid item xs={12} key={`${player.name}-${index}`}>
             <Card
               sx={{
-                backgroundColor: '#e0f7fa',
+                backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es el primero
                 display: 'flex',
                 alignItems: 'center',
                 padding: '20px',
@@ -328,35 +304,32 @@ const Players = () => {
                 alt={player.name}
               />
               <Box>
-                <Typography variant="h6">{player.name}</Typography>
+                <Typography variant="h6">
+                  {player.name} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+                </Typography>
                 <Typography variant="body2">{player.country}</Typography>
               </Box>
               <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <Typography variant="body2">
-                  {player.gamesWon} partidos ganados |
-                  <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
+                  {player.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
                 </Typography>
-              </Box>
-              <Box sx={{ marginLeft: '20px' }}>
-                {getRankingChangeIcon(index + 1, player.previousRank)}
               </Box>
             </Card>
           </Grid>
         ))}
       </Grid>
 
-      {/* Encabezado de la sección Ranking por Pareja */}
+      {/* Sección Ranking por Pareja */}
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
         <Typography variant="h5">Ranking por Pareja</Typography>
       </Box>
 
-      {/* Lista de Ranking por Pareja */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPairs.map((pair, index) => (
           <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
             <Card
               sx={{
-                backgroundColor: '#e0f7fa',
+                backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es la primera pareja
                 display: 'flex',
                 alignItems: 'center',
                 padding: '20px',
@@ -367,11 +340,10 @@ const Players = () => {
               </Typography>
               <Box>
                 <Typography variant="h6">
-                  {pair.players[0]} & {pair.players[1]}
+                  {pair.players[0]} & {pair.players[1]} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
                 </Typography>
                 <Typography variant="body2">
-                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span>{' '}
-                  eficacia
+                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span> eficacia
                 </Typography>
               </Box>
             </Card>
