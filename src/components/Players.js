@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Grid, Card, CardContent, CardMedia, Button } from '@mui/material';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'; // Flecha para indicar más detalles
 import { collection, getDocs } from "firebase/firestore";
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -71,6 +72,43 @@ const calculatePairRanking = (pairs) => {
   });
 };
 
+// Función para calcular las victorias consecutivas de cada jugador
+const calculateConsecutiveWins = (results, player) => {
+  let consecutiveWins = 0;
+  let maxConsecutiveWins = 0;
+
+  results.forEach(result => {
+    const { pair1, pair2, sets } = result;
+    let playerWon = false;
+
+    let pair1Wins = 0;
+    let pair2Wins = 0;
+
+    sets.forEach(set => {
+      if (set.pair1Score > set.pair2Score) {
+        pair1Wins += 1;
+      } else {
+        pair2Wins += 1;
+      }
+    });
+
+    if (pair1Wins > pair2Wins && (pair1.player1 === player || pair1.player2 === player)) {
+      playerWon = true;
+    } else if (pair2Wins > pair1Wins && (pair2.player1 === player || pair2.player2 === player)) {
+      playerWon = true;
+    }
+
+    if (playerWon) {
+      consecutiveWins += 1;
+      maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins);
+    } else {
+      consecutiveWins = 0; // Resetear si pierde
+    }
+  });
+
+  return maxConsecutiveWins;
+};
+
 const Players = () => {
   const [results, setResults] = useState([]);
   const [playerStats, setPlayerStats] = useState({});
@@ -128,6 +166,12 @@ const Players = () => {
         stats[pair1.player1].gamesLost += 1;
         stats[pair1.player2].gamesLost += 1;
       }
+
+      // Calcular victorias consecutivas
+      stats[pair1.player1].consecutiveWins = calculateConsecutiveWins(results, pair1.player1);
+      stats[pair1.player2].consecutiveWins = calculateConsecutiveWins(results, pair1.player2);
+      stats[pair2.player1].consecutiveWins = calculateConsecutiveWins(results, pair2.player1);
+      stats[pair2.player2].consecutiveWins = calculateConsecutiveWins(results, pair2.player2);
 
       // Normalizar el nombre de la pareja (ordenar alfabéticamente los nombres)
       const normalizePairKey = (player1, player2) => {
@@ -213,6 +257,7 @@ const Players = () => {
                 <Typography variant="h6" gutterBottom sx={{ '&:hover': { color: 'blue' } }}>
                   {player.name}
                 </Typography>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -224,9 +269,16 @@ const Players = () => {
                     backgroundColor: '#f0f0f0',
                   }}
                 >
-                  <img src={player.flag} alt={`${player.country} flag`} style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }} />
-                  <Typography variant="body2">{player.country}</Typography>
+                  <img
+                    src={player.flag}
+                    alt={`${player.country} flag`}
+                    style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }}
+                  />
+                  <Typography variant="body2" sx={{ marginRight: '10px' }}>{player.country}</Typography>
                 </Box>
+
+                {/* Flecha negra fuera de la bandera */}
+                <ArrowDropDownIcon sx={{ fontSize: 20, color: 'black', marginLeft: '10px' }} />
               </CardContent>
 
               {selectedPlayer?.name === player.name && (
