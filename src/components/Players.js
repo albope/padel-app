@@ -73,9 +73,44 @@ const players = [
   },
 ];
 
+// Información de las parejas
+const pairs = [
+  {
+    players: ['Ricardo', 'Alberto'],
+    gamesWon: 25,
+    efficiency: '60%',
+  },
+  {
+    players: ['Lucas', 'Martin'],
+    gamesWon: 32,
+    efficiency: '66.7%',
+  },
+  {
+    players: ['Ricardo', 'Lucas'],
+    gamesWon: 15,
+    efficiency: '50%',
+  },
+  {
+    players: ['Martin', 'Alberto'],
+    gamesWon: 20,
+    efficiency: '55%',
+  },
+];
+
 // Función para calcular el ranking basado en partidos ganados y eficacia
 const calculateRanking = (players) => {
   return players.sort((a, b) => {
+    const efficiencyDiff = parseFloat(b.efficiency) - parseFloat(a.efficiency);
+    if (efficiencyDiff !== 0) {
+      return efficiencyDiff;
+    }
+    return b.gamesWon - a.gamesWon;
+  });
+};
+
+// Función para calcular el ranking de las parejas
+const calculatePairRanking = (pairs) => {
+  return pairs.sort((a, b) => {
     const efficiencyDiff = parseFloat(b.efficiency) - parseFloat(a.efficiency);
     if (efficiencyDiff !== 0) {
       return efficiencyDiff;
@@ -103,6 +138,7 @@ const Players = () => {
   };
 
   const rankedPlayers = calculateRanking(players);
+  const rankedPairs = calculatePairRanking(pairs); // Ranking de parejas
 
   return (
     <Container>
@@ -213,12 +249,12 @@ const Players = () => {
         ))}
       </Grid>
 
-      {/* Encabezado de la sección Ranking */}
+      {/* Encabezado de la sección Ranking Individual */}
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
         <Typography variant="h5">Ranking Individual</Typography>
       </Box>
 
-      {/* Lista de Ranking */}
+      {/* Lista de Ranking Individual */}
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
         {rankedPlayers.map((player, index) => (
           <Grid item xs={12} key={player.name}>
@@ -258,6 +294,40 @@ const Players = () => {
         ))}
       </Grid>
 
+      {/* Encabezado de la sección Ranking por Pareja */}
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
+        <Typography variant="h5">Ranking por Pareja</Typography>
+      </Box>
+
+      {/* Lista de Ranking por Pareja */}
+      <Grid container spacing={4} sx={{ marginTop: '20px' }}>
+        {rankedPairs.map((pair, index) => (
+          <Grid item xs={12} key={index}>
+            <Card
+              sx={{
+                backgroundColor: '#e0f7fa',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '20px',
+              }}
+            >
+              <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                {index + 1}
+              </Typography>
+              <Box>
+                <Typography variant="h6">
+                  {pair.players[0]} & {pair.players[1]}
+                </Typography>
+                <Typography variant="body2">
+                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}</span>{' '}
+                  eficacia
+                </Typography>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
       {/* Botón para volver a la página principal */}
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
         <Button
@@ -281,4 +351,4 @@ const Players = () => {
   );
 };
 
-export default Players;               
+export default Players;
