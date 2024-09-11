@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Container, Typography, Box, Grid, Card, CardContent, CardMedia, Button } from '@mui/material';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'; // Icono de flecha
+import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import RemoveIcon from '@mui/icons-material/Remove'; // Línea horizontal para la posición sin cambio
 import { useNavigate } from 'react-router-dom';
 
+// Información de los jugadores
 const players = [
   {
     name: 'Ricardo',
@@ -18,6 +21,7 @@ const players = [
     gamesLost: 15,
     consecutiveWins: 5,
     efficiency: '70%',
+    previousRank: 3,
   },
   {
     name: 'Alberto',
@@ -33,6 +37,7 @@ const players = [
     gamesLost: 15,
     consecutiveWins: 4,
     efficiency: '66.6%',
+    previousRank: 2,
   },
   {
     name: 'Lucas',
@@ -48,6 +53,7 @@ const players = [
     gamesLost: 14,
     consecutiveWins: 3,
     efficiency: '70.83%',
+    previousRank: 1,
   },
   {
     name: 'Martin',
@@ -63,10 +69,11 @@ const players = [
     gamesLost: 14,
     consecutiveWins: 6,
     efficiency: '73%',
+    previousRank: 4,
   },
 ];
 
-// Función para calcular el ranking basado en partidos ganados y eficiencia
+// Función para calcular el ranking basado en partidos ganados y eficacia
 const calculateRanking = (players) => {
   return players.sort((a, b) => {
     const efficiencyDiff = parseFloat(b.efficiency) - parseFloat(a.efficiency);
@@ -75,6 +82,16 @@ const calculateRanking = (players) => {
     }
     return b.gamesWon - a.gamesWon;
   });
+};
+
+const getRankingChangeIcon = (currentRank, previousRank) => {
+  if (currentRank < previousRank) {
+    return <ArrowDropUpIcon sx={{ color: 'green' }} />;
+  } else if (currentRank > previousRank) {
+    return <ArrowDropDownIcon sx={{ color: 'red' }} />;
+  } else {
+    return <RemoveIcon sx={{ color: 'black' }} />;
+  }
 };
 
 const Players = () => {
@@ -181,7 +198,7 @@ const Players = () => {
                       </Typography>
                     </Grid>
                     <Grid item xs={12}>
-                      <Typography variant="h6" sx={{ fontSize: '24px' }}>
+                      <Typography variant="h6" sx={{ fontSize: '24px', fontWeight: 'bold' }}>
                         {player.efficiency}
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
@@ -198,7 +215,7 @@ const Players = () => {
 
       {/* Encabezado de la sección Ranking */}
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
-        <Typography variant="h5">Ranking</Typography>
+        <Typography variant="h5">Ranking Individual</Typography>
       </Box>
 
       {/* Lista de Ranking */}
@@ -228,8 +245,13 @@ const Players = () => {
               </Box>
               <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <Typography variant="body2">
-                  {player.gamesWon} partidos ganados | {player.efficiency} eficacia
+                  {player.gamesWon} partidos ganados |
+                  <span style={{ fontWeight: 'bold' }}>{player.efficiency}</span> eficacia
                 </Typography>
+              </Box>
+              {/* Icono para el cambio de posición */}
+              <Box sx={{ marginLeft: '20px' }}>
+                {getRankingChangeIcon(index + 1, player.previousRank)}
               </Box>
             </Card>
           </Grid>
@@ -259,4 +281,4 @@ const Players = () => {
   );
 };
 
-export default Players;
+export default Players;               
