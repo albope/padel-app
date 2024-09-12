@@ -55,6 +55,20 @@ const ResultForm = () => {
     }
   };
 
+  // Función para manejar el cambio de selección de jugadores
+  const handlePlayerChange = (pair, playerKey, value) => {
+    if (pair === 'pair1') {
+      setPair1({ ...pair1, [playerKey]: value });
+    } else {
+      setPair2({ ...pair2, [playerKey]: value });
+    }
+  };
+
+  // Filtrar jugadores disponibles para evitar la selección del mismo jugador en la misma pareja
+  const filterAvailablePlayers = (selectedPlayer, currentPlayer) => {
+    return players.filter((player) => player !== selectedPlayer || player === currentPlayer);
+  };
+
   return (
     <Container>
       {/* Encabezado */}
@@ -77,10 +91,10 @@ const ResultForm = () => {
             <InputLabel shrink={true}>Pareja 1 - Jugador 1</InputLabel>
             <Select
               value={pair1.player1}
-              onChange={(e) => setPair1({ ...pair1, player1: e.target.value })}
+              onChange={(e) => handlePlayerChange('pair1', 'player1', e.target.value)}
               fullWidth
             >
-              {players.map((player) => (
+              {filterAvailablePlayers(pair1.player2, pair1.player1).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -91,10 +105,10 @@ const ResultForm = () => {
             <InputLabel shrink={true}>Pareja 1 - Jugador 2</InputLabel>
             <Select
               value={pair1.player2}
-              onChange={(e) => setPair1({ ...pair1, player2: e.target.value })}
+              onChange={(e) => handlePlayerChange('pair1', 'player2', e.target.value)}
               fullWidth
             >
-              {players.map((player) => (
+              {filterAvailablePlayers(pair1.player1, pair1.player2).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -107,10 +121,10 @@ const ResultForm = () => {
             <InputLabel shrink={true}>Pareja 2 - Jugador 1</InputLabel>
             <Select
               value={pair2.player1}
-              onChange={(e) => setPair2({ ...pair2, player1: e.target.value })}
+              onChange={(e) => handlePlayerChange('pair2', 'player1', e.target.value)}
               fullWidth
             >
-              {players.map((player) => (
+              {filterAvailablePlayers(pair2.player2, pair2.player1).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -121,10 +135,10 @@ const ResultForm = () => {
             <InputLabel shrink={true}>Pareja 2 - Jugador 2</InputLabel>
             <Select
               value={pair2.player2}
-              onChange={(e) => setPair2({ ...pair2, player2: e.target.value })}
+              onChange={(e) => handlePlayerChange('pair2', 'player2', e.target.value)}
               fullWidth
             >
-              {players.map((player) => (
+              {filterAvailablePlayers(pair2.player1, pair2.player2).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
