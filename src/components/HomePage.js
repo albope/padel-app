@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, IconButton, SwipeableDrawer, List, ListItem, ListItemText, Divider, Button, Grid } from '@mui/material';
+import { Container, Typography, Box, IconButton, SwipeableDrawer, List, ListItem, ListItemText, Divider, Grid } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'; // Icono "i"
 import CloseIcon from '@mui/icons-material/Close'; // Ícono de cerrar
 import ResultsList from './ResultsList';
@@ -85,7 +85,7 @@ const HomePage = () => {
   };
 
   return (
-    <Container maxWidth="sm" disableGutters>
+    <Container maxWidth="sm" disableGutters style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* Encabezado de la App */}
       <Box
         sx={{
@@ -115,7 +115,9 @@ const HomePage = () => {
       </Box>
 
       {/* Lista de Resultados */}
-      <ResultsList />
+      <Box sx={{ flex: '1' }}>
+        <ResultsList />
+      </Box>
 
       {/* Botón flotante con icono de información alineado a la derecha */}
       <Box sx={{ position: 'fixed', bottom: 20, right: 20, textAlign: 'center' }}>
