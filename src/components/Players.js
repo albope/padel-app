@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Typography, Box, Grid, Card, CardContent, CardMedia, Button } from '@mui/material';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'; // Flecha para indicar más detalles
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import { collection, getDocs } from "firebase/firestore";
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
@@ -192,10 +192,10 @@ const Players = () => {
       const pairKey2 = normalizePairKey(pair2.player1, pair2.player2);
 
       if (!pairStats[pairKey1]) {
-        pairStats[pairKey1] = { gamesWon: 0, efficiency: 0, gamesPlayed: 0 };
+        pairStats[pairKey1] = { gamesWon: 0, gamesPlayed: 0 };
       }
       if (!pairStats[pairKey2]) {
-        pairStats[pairKey2] = { gamesWon: 0, efficiency: 0, gamesPlayed: 0 };
+        pairStats[pairKey2] = { gamesWon: 0, gamesPlayed: 0 };
       }
 
       pairStats[pairKey1].gamesPlayed += 1;
@@ -212,6 +212,12 @@ const Players = () => {
     Object.keys(stats).forEach(player => {
       const { gamesWon, gamesPlayed } = stats[player];
       stats[player].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
+    });
+
+    // Calcular eficacia para cada pareja
+    Object.keys(pairStats).forEach(pair => {
+      const { gamesWon, gamesPlayed } = pairStats[pair];
+      pairStats[pair].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
     });
 
     setPlayerStats(stats);
