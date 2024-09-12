@@ -5,6 +5,7 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'; // Flecha par
 import { collection, getDocs } from "firebase/firestore";
 import { db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 
 // Información estática de los jugadores
 const playersInfo = {
@@ -72,18 +73,21 @@ const calculatePairRanking = (pairs) => {
   });
 };
 
-// Función para calcular las victorias consecutivas de cada jugador
 const calculateConsecutiveWins = (results, player) => {
   let consecutiveWins = 0;
   let maxConsecutiveWins = 0;
 
-  results.forEach(result => {
+  // Ordenar los resultados por fecha (de más antiguo a más reciente)
+  const sortedResults = results.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+
+  sortedResults.forEach(result => {
     const { pair1, pair2, sets } = result;
     let playerWon = false;
 
     let pair1Wins = 0;
     let pair2Wins = 0;
 
+    // Contar cuántos sets ha ganado cada pareja
     sets.forEach(set => {
       if (set.pair1Score > set.pair2Score) {
         pair1Wins += 1;
@@ -92,21 +96,23 @@ const calculateConsecutiveWins = (results, player) => {
       }
     });
 
-    if (pair1Wins > pair2Wins && (pair1.player1 === player || pair1.player2 === player)) {
-      playerWon = true;
-    } else if (pair2Wins > pair1Wins && (pair2.player1 === player || pair2.player2 === player)) {
+    // Determinar si el jugador ganó o perdió el partido
+    if ((pair1Wins > pair2Wins && (pair1.player1 === player || pair1.player2 === player)) || 
+        (pair2Wins > pair1Wins && (pair2.player1 === player || pair2.player2 === player))) {
       playerWon = true;
     }
 
+    // Si el jugador ganó el partido, incrementa la racha de victorias consecutivas
     if (playerWon) {
       consecutiveWins += 1;
       maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins);
     } else {
-      consecutiveWins = 0; // Resetear si pierde
+      // Si el jugador perdió, reinicia la racha
+      consecutiveWins = 0;
     }
   });
 
-  return maxConsecutiveWins;
+  return consecutiveWins; // Devolver la racha de victorias consecutivas actual, no la máxima
 };
 
 const Players = () => {
@@ -120,8 +126,12 @@ const Players = () => {
     const fetchResults = async () => {
       const querySnapshot = await getDocs(collection(db, "results"));
       const fetchedResults = querySnapshot.docs.map(doc => doc.data());
-      setResults(fetchedResults);
-      calculateStats(fetchedResults);
+      
+      // Filtrar resultados que tienen una fecha válida
+      const validResults = fetchedResults.filter(result => result.date);
+
+      setResults(validResults);
+      calculateStats(validResults);
     };
 
     fetchResults();
@@ -134,15 +144,15 @@ const Players = () => {
     results.forEach(result => {
       const { pair1, pair2, sets } = result;
 
-      // Actualizar estadísticas de cada jugador
+      // Inicializamos el estado de las estadísticas del jugador si no existen
       [pair1.player1, pair1.player2, pair2.player1, pair2.player2].forEach(player => {
         if (!stats[player]) {
           stats[player] = { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
         }
-        stats[player].gamesPlayed += 1;
+        stats[player].gamesPlayed += 1;  // Incrementamos juegos jugados para todos
       });
 
-      // Determinar quién ganó según los sets
+      // Contar los sets ganados por cada pareja
       let pair1Wins = 0;
       let pair2Wins = 0;
 
@@ -154,26 +164,26 @@ const Players = () => {
         }
       });
 
-      // Actualizar las victorias y derrotas
+      // Determinamos quién ganó basándonos en la cantidad de sets ganados
       if (pair1Wins > pair2Wins) {
-        stats[pair1.player1].gamesWon += 1;
+        stats[pair1.player1].gamesWon += 1;  // Si pareja 1 ganó, sumamos la victoria a sus jugadores
         stats[pair1.player2].gamesWon += 1;
-        stats[pair2.player1].gamesLost += 1;
+        stats[pair2.player1].gamesLost += 1;  // Si pareja 2 perdió, sumamos la derrota a sus jugadores
         stats[pair2.player2].gamesLost += 1;
       } else {
-        stats[pair2.player1].gamesWon += 1;
+        stats[pair2.player1].gamesWon += 1;  // Si pareja 2 ganó, sumamos la victoria a sus jugadores
         stats[pair2.player2].gamesWon += 1;
-        stats[pair1.player1].gamesLost += 1;
+        stats[pair1.player1].gamesLost += 1;  // Si pareja 1 perdió, sumamos la derrota a sus jugadores
         stats[pair1.player2].gamesLost += 1;
       }
 
-      // Calcular victorias consecutivas
+      // Calcular victorias consecutivas correctamente para cada jugador
       stats[pair1.player1].consecutiveWins = calculateConsecutiveWins(results, pair1.player1);
       stats[pair1.player2].consecutiveWins = calculateConsecutiveWins(results, pair1.player2);
       stats[pair2.player1].consecutiveWins = calculateConsecutiveWins(results, pair2.player1);
       stats[pair2.player2].consecutiveWins = calculateConsecutiveWins(results, pair2.player2);
 
-      // Normalizar el nombre de la pareja (ordenar alfabéticamente los nombres)
+      // Normalizar el nombre de la pareja para estadísticas de parejas
       const normalizePairKey = (player1, player2) => {
         return [player1, player2].sort().join('-');
       };
@@ -198,30 +208,30 @@ const Players = () => {
       }
     });
 
-    // Calcular eficacia para cada jugador y pareja
+    // Calcular eficacia para cada jugador
     Object.keys(stats).forEach(player => {
       const { gamesWon, gamesPlayed } = stats[player];
       stats[player].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
-    });
-
-    Object.keys(pairStats).forEach(pair => {
-      const { gamesWon, gamesPlayed } = pairStats[pair];
-      pairStats[pair].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
     });
 
     setPlayerStats(stats);
     setPairStats(pairStats);
   };
 
-  const rankedPlayers = calculateRanking(Object.keys(playerStats).map(player => ({
-    ...playersInfo[player],
-    ...playerStats[player],
-  })));
+  // Filtrar jugadores que han jugado al menos un partido
+  const rankedPlayers = calculateRanking(
+    Object.keys(playerStats).map(player => ({
+      ...playersInfo[player],
+      ...playerStats[player],
+    }))
+  ).filter(player => player.gamesPlayed > 0); // Solo mostrar jugadores que han jugado al menos un partido
 
-  const rankedPairs = calculatePairRanking(Object.keys(pairStats).map(pair => ({
-    players: pair.split('-'),
-    ...pairStats[pair],
-  })));
+  const rankedPairs = calculatePairRanking(
+    Object.keys(pairStats).map(pair => ({
+      players: pair.split('-'),
+      ...pairStats[pair],
+    }))
+  );
 
   return (
     <Container>
@@ -231,19 +241,19 @@ const Players = () => {
       </Box>
 
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
-        {rankedPlayers.map((player) => (
-          <Grid item xs={12} sm={6} md={3} key={player.name}>
+        {Object.keys(playersInfo).map((key) => (
+          <Grid item xs={12} sm={6} md={3} key={key}>
             <Card
               onClick={() => {
-                console.log('Card clicked:', player.name);
-                setSelectedPlayer(selectedPlayer?.name === player.name ? null : player);
+                console.log('Card clicked:', playersInfo[key].name);
+                setSelectedPlayer(selectedPlayer?.name === playersInfo[key].name ? null : playersInfo[key]);
               }}
               sx={{
                 position: 'relative',
                 '&:hover': { boxShadow: 6, cursor: 'pointer' },
               }}
             >
-              <CardMedia component="img" height="200" image={player.image} alt={player.name} />
+              <CardMedia component="img" height="200" image={playersInfo[key].image} alt={playersInfo[key].name} />
               <CardContent
                 sx={{
                   textAlign: 'center',
@@ -251,11 +261,11 @@ const Players = () => {
                   justifyContent: 'center',
                   alignItems: 'center',
                   cursor: 'pointer',
-                  backgroundColor: selectedPlayer?.name === player.name ? '#f5f5f5' : 'transparent',
+                  backgroundColor: selectedPlayer?.name === playersInfo[key].name ? '#f5f5f5' : 'transparent',
                 }}
               >
                 <Typography variant="h6" gutterBottom sx={{ '&:hover': { color: 'blue' } }}>
-                  {player.name}
+                  {playersInfo[key].name}
                 </Typography>
 
                 <Box
@@ -270,53 +280,52 @@ const Players = () => {
                   }}
                 >
                   <img
-                    src={player.flag}
-                    alt={`${player.country} flag`}
+                    src={playersInfo[key].flag}
+                    alt={`${playersInfo[key].country} flag`}
                     style={{ height: '20px', borderRadius: '50%', marginRight: '5px' }}
                   />
-                  <Typography variant="body2" sx={{ marginRight: '10px' }}>{player.country}</Typography>
+                  <Typography variant="body2" sx={{ marginRight: '10px' }}>{playersInfo[key].country}</Typography>
                 </Box>
 
-                {/* Flecha negra fuera de la bandera */}
                 <ArrowDropDownIcon sx={{ fontSize: 20, color: 'black', marginLeft: '10px' }} />
               </CardContent>
 
-              {selectedPlayer?.name === player.name && (
+              {selectedPlayer?.name === playersInfo[key].name && (
                 <CardContent>
                   <Typography variant="body2">
-                    Posición: {player.position} <br />
-                    Fecha de nacimiento: {player.birthDate} <br />
-                    Altura: {player.height} <br />
-                    Lugar de nacimiento: {player.birthPlace} <br />
+                    Posición: {playersInfo[key].position} <br />
+                    Fecha de nacimiento: {playersInfo[key].birthDate} <br />
+                    Altura: {playersInfo[key].height} <br />
+                    Lugar de nacimiento: {playersInfo[key].birthPlace} <br />
                   </Typography>
                   <Grid container spacing={2} sx={{ marginTop: '10px', textAlign: 'center' }}>
                     <Grid item xs={6}>
-                      <Typography variant="h6">{player.gamesPlayed}</Typography>
+                      <Typography variant="h6">{playerStats[key]?.gamesPlayed || 0}</Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Partidos jugados
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="h6">{player.gamesWon}</Typography>
+                      <Typography variant="h6">{playerStats[key]?.gamesWon || 0}</Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Partidos ganados
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="h6">{player.gamesLost}</Typography>
+                      <Typography variant="h6">{playerStats[key]?.gamesLost || 0}</Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Partidos perdidos
                       </Typography>
                     </Grid>
                     <Grid item xs={6}>
-                      <Typography variant="h6">{player.consecutiveWins}</Typography>
+                      <Typography variant="h6">{playerStats[key]?.consecutiveWins || 0}</Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Victorias consecutivas
                       </Typography>
                     </Grid>
                     <Grid item xs={12}>
                       <Typography variant="h6" sx={{ fontSize: '24px', fontWeight: 'bold' }}>
-                        {player.efficiency}%
+                        {playerStats[key]?.efficiency || 0}%
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'gray' }}>
                         Eficacia
@@ -336,39 +345,45 @@ const Players = () => {
       </Box>
 
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
-        {rankedPlayers.map((player, index) => (
-          <Grid item xs={12} key={`${player.name}-${index}`}>
-            <Card
-              sx={{
-                backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es el primero
-                display: 'flex',
-                alignItems: 'center',
-                padding: '20px',
-              }}
-            >
-              <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
-                {index + 1}
-              </Typography>
-              <CardMedia
-                component="img"
-                sx={{ width: '60px', height: '60px', borderRadius: '50%', marginRight: '20px' }}
-                image={player.image}
-                alt={player.name}
-              />
-              <Box>
-                <Typography variant="h6">
-                  {player.name} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+        {rankedPlayers.length === 0 ? (
+          <Typography sx={{ textAlign: 'center', width: '100%' }}>
+            No se han jugado partidos todavía
+          </Typography>
+        ) : (
+          rankedPlayers.map((player, index) => (
+            <Grid item xs={12} key={`${player.name}-${index}`}>
+              <Card
+                sx={{
+                  backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es el primero
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '20px',
+                }}
+              >
+                <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                  {index + 1}
                 </Typography>
-                <Typography variant="body2">{player.country}</Typography>
-              </Box>
-              <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
-                <Typography variant="body2">
-                  {player.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
-                </Typography>
-              </Box>
-            </Card>
-          </Grid>
-        ))}
+                <CardMedia
+                  component="img"
+                  sx={{ width: '60px', height: '60px', borderRadius: '50%', marginRight: '20px' }}
+                  image={player.image}
+                  alt={player.name}
+                />
+                <Box>
+                  <Typography variant="h6">
+                    {player.name} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+                  </Typography>
+                  <Typography variant="body2">{player.country}</Typography>
+                </Box>
+                <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <Typography variant="body2">
+                    {player.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
+                  </Typography>
+                </Box>
+              </Card>
+            </Grid>
+          ))
+        )}
       </Grid>
 
       {/* Sección Ranking por Pareja */}
@@ -377,30 +392,36 @@ const Players = () => {
       </Box>
 
       <Grid container spacing={4} sx={{ marginTop: '20px' }}>
-        {rankedPairs.map((pair, index) => (
-          <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
-            <Card
-              sx={{
-                backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es la primera pareja
-                display: 'flex',
-                alignItems: 'center',
-                padding: '20px',
-              }}
-            >
-              <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
-                {index + 1}
-              </Typography>
-              <Box>
-                <Typography variant="h6">
-                  {pair.players[0]} & {pair.players[1]} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+        {rankedPairs.length === 0 ? (
+          <Typography sx={{ textAlign: 'center', width: '100%' }}>
+            No se han jugado partidos todavía
+          </Typography>
+        ) : (
+          rankedPairs.map((pair, index) => (
+            <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
+              <Card
+                sx={{
+                  backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es la primera pareja
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '20px',
+                }}
+              >
+                <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                  {index + 1}
                 </Typography>
-                <Typography variant="body2">
-                  {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span> eficacia
-                </Typography>
-              </Box>
-            </Card>
-          </Grid>
-        ))}
+                <Box>
+                  <Typography variant="h6">
+                    {pair.players[0]} & {pair.players[1]} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+                  </Typography>
+                  <Typography variant="body2">
+                    {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span> eficacia
+                  </Typography>
+                </Box>
+              </Card>
+            </Grid>
+          ))
+        )}
       </Grid>
 
       {/* Botón para volver a la página principal */}
