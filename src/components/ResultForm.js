@@ -174,6 +174,8 @@ const ResultForm = () => {
                 value={set.pair1Score}
                 onChange={(e) => handleSetChange(index, 'pair1Score', e.target.value)}
                 fullWidth
+                inputProps={{ min: 0, max: 7, type: 'number' }} // Restringir entre 0 y 7
+                autoComplete="off" // Desactivar autocompletado
               />
             </Grid>
             <Grid item xs={6}>
@@ -182,6 +184,8 @@ const ResultForm = () => {
                 value={set.pair2Score}
                 onChange={(e) => handleSetChange(index, 'pair2Score', e.target.value)}
                 fullWidth
+                inputProps={{ min: 0, max: 7, type: 'number' }} // Restringir entre 0 y 7
+                autoComplete="off" // Desactivar autocompletado
               />
             </Grid>
           </React.Fragment>
