@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Grid, Select, MenuItem, InputLabel, FormControl, Box, IconButton } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"; // Importa serverTimestamp para guardar la fecha de creación
 import DeleteIcon from '@mui/icons-material/Delete'; // Importa el icono de eliminar
 
 const players = ["Lucas", "Ricardo", "Martin", "Bort", "Invitado"];
@@ -15,6 +15,7 @@ const ResultForm = () => {
   const [showThirdSet, setShowThirdSet] = useState(false);
   const [date, setDate] = useState('');
   const [location, setLocation] = useState('');
+  const [addedBy, setAddedBy] = useState(localStorage.getItem('addedBy') || ''); // Obtener el nombre de localStorage
 
   const navigate = useNavigate();
 
@@ -25,6 +26,11 @@ const ResultForm = () => {
   };
 
   const handleSubmit = async () => {
+    if (!addedBy) {
+      alert("Por favor ingrese su nombre.");
+      return;
+    }
+
     try {
       await addDoc(collection(db, "results"), {
         pair1,
@@ -32,7 +38,10 @@ const ResultForm = () => {
         sets,
         date,
         location,
+        addedBy, // Guardar el nombre del usuario
+        createdAt: serverTimestamp(), // Guardar la fecha de creación automáticamente
       });
+      localStorage.setItem('addedBy', addedBy); // Guardar el nombre en localStorage para futuras visitas
       navigate('/');
     } catch (error) {
       console.error("Error al guardar el resultado:", error);
@@ -64,9 +73,13 @@ const ResultForm = () => {
     }
   };
 
-  // Filtrar jugadores disponibles para evitar la selección del mismo jugador en la misma pareja
-  const filterAvailablePlayers = (selectedPlayer, currentPlayer) => {
-    return players.filter((player) => player !== selectedPlayer || player === currentPlayer);
+  // Filtrar jugadores disponibles para evitar la selección del mismo jugador en la misma pareja y entre ambas parejas
+  const filterAvailablePlayers = (selectedPlayer, currentPlayer, otherPairPlayers) => {
+    return players.filter((player) => 
+      player !== selectedPlayer && 
+      !otherPairPlayers.includes(player) || 
+      player === currentPlayer
+    );
   };
 
   return (
@@ -94,7 +107,7 @@ const ResultForm = () => {
               onChange={(e) => handlePlayerChange('pair1', 'player1', e.target.value)}
               fullWidth
             >
-              {filterAvailablePlayers(pair1.player2, pair1.player1).map((player) => (
+              {filterAvailablePlayers(pair1.player2, pair1.player1, [pair2.player1, pair2.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -108,7 +121,7 @@ const ResultForm = () => {
               onChange={(e) => handlePlayerChange('pair1', 'player2', e.target.value)}
               fullWidth
             >
-              {filterAvailablePlayers(pair1.player1, pair1.player2).map((player) => (
+              {filterAvailablePlayers(pair1.player1, pair1.player2, [pair2.player1, pair2.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -124,7 +137,7 @@ const ResultForm = () => {
               onChange={(e) => handlePlayerChange('pair2', 'player1', e.target.value)}
               fullWidth
             >
-              {filterAvailablePlayers(pair2.player2, pair2.player1).map((player) => (
+              {filterAvailablePlayers(pair2.player2, pair2.player1, [pair1.player1, pair1.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -138,7 +151,7 @@ const ResultForm = () => {
               onChange={(e) => handlePlayerChange('pair2', 'player2', e.target.value)}
               fullWidth
             >
-              {filterAvailablePlayers(pair2.player1, pair2.player2).map((player) => (
+              {filterAvailablePlayers(pair2.player1, pair2.player2, [pair1.player1, pair1.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
               ))}
             </Select>
@@ -174,6 +187,15 @@ const ResultForm = () => {
           </FormControl>
         </Grid>
       </Grid>
+
+      {/* Nombre de quien añade el resultado */}
+      <TextField
+        label="Nombre de quien añade el resultado"
+        value={addedBy}
+        onChange={(e) => setAddedBy(e.target.value)} // Actualizar el nombre
+        fullWidth
+        sx={{ marginTop: '20px' }}
+      />
 
       {/* Resultados de sets */}
       <Typography variant="h6" sx={{ marginTop: '30px', fontWeight: 'bold', color: 'black', textAlign: 'center' }}>
