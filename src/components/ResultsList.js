@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -46,9 +46,20 @@ const ResultsList = () => {
     filterByMonth(results, newMonth);
   };
 
-  const handleDeleteResult = async (resultId) => {
+  const handleDeleteResult = async (resultId, resultData) => {
     try {
+      // Eliminar el documento de la colección "results"
       await deleteDoc(doc(db, "results", resultId));
+
+      // Registrar la eliminación en la colección "deletions"
+      await addDoc(collection(db, "deletions"), {
+        resultId, // ID del resultado eliminado
+        dateDeleted: serverTimestamp(), // Timestamp de la eliminación
+        deletedBy: localStorage.getItem('addedBy') || 'Anónimo', // Quién eliminó el resultado
+        resultData // Información del resultado eliminado
+      });
+
+      // Actualizar la lista de resultados eliminando el resultado localmente
       setResults(prevResults => prevResults.filter(result => result.id !== resultId));
       filterByMonth(results.filter(result => result.id !== resultId), currentMonth);
     } catch (error) {
@@ -129,7 +140,7 @@ const ResultsList = () => {
 
                 {/* Icono de eliminar */}
                 <IconButton
-                  onClick={() => handleDeleteResult(result.id)}
+                  onClick={() => handleDeleteResult(result.id, result)}
                   sx={{ position: 'absolute', top: '10px', right: '10px', color: 'red' }}
                 >
                   <DeleteIcon />
