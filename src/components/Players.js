@@ -73,14 +73,22 @@ const calculatePairRanking = (pairs) => {
   });
 };
 
+// Función para normalizar las parejas
+const normalizePairKey = (player1, player2) => {
+  return [player1, player2].sort().join('-');
+};
+
 const calculateConsecutiveWins = (results, player) => {
   let consecutiveWins = 0;
   let maxConsecutiveWins = 0;
+  let lastGameWon = false; // Variable para seguir si el último juego fue una victoria
 
   // Ordenar los resultados por fecha (de más antiguo a más reciente)
+  console.log("Resultados antes de la ordenación:", results);
   const sortedResults = results.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+  console.log("Partidos ordenados por fecha:", sortedResults);
 
-  sortedResults.forEach(result => {
+  sortedResults.forEach((result, index) => {
     const { pair1, pair2, sets } = result;
     let playerWon = false;
 
@@ -88,7 +96,7 @@ const calculateConsecutiveWins = (results, player) => {
     let pair2Wins = 0;
 
     // Contar cuántos sets ha ganado cada pareja
-    sets.forEach(set => {
+    sets.forEach((set) => {
       if (set.pair1Score > set.pair2Score) {
         pair1Wins += 1;
       } else {
@@ -96,23 +104,43 @@ const calculateConsecutiveWins = (results, player) => {
       }
     });
 
-    // Determinar si el jugador ganó o perdió el partido
-    if ((pair1Wins > pair2Wins && (pair1.player1 === player || pair1.player2 === player)) || 
-        (pair2Wins > pair1Wins && (pair2.player1 === player || pair2.player2 === player))) {
+    console.log(`Partido ${index + 1} sets ganados: Pareja 1 = ${pair1Wins}, Pareja 2 = ${pair2Wins}`);
+
+    // Determinar si el jugador ganó el partido
+    if (
+      (pair1Wins > pair2Wins && (pair1.player1 === player || pair1.player2 === player)) ||
+      (pair2Wins > pair1Wins && (pair2.player1 === player || pair2.player2 === player))
+    ) {
       playerWon = true;
+      console.log(`${player} ha ganado el partido ${index + 1}`);
+    } else {
+      console.log(`${player} ha perdido el partido ${index + 1}`);
     }
 
-    // Si el jugador ganó el partido, incrementa la racha de victorias consecutivas
+    // Si el jugador ganó el partido
     if (playerWon) {
-      consecutiveWins += 1;
-      maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins);
+      if (lastGameWon) {
+        consecutiveWins += 1;
+        console.log(`Racha actual para ${player}: ${consecutiveWins} victorias consecutivas.`);
+      } else {
+        consecutiveWins = 1; // Empezar una nueva racha si el último partido no fue victoria
+        console.log(`${player} empieza una nueva racha.`);
+      }
+      lastGameWon = true;
     } else {
-      // Si el jugador perdió, reinicia la racha
+      // Si perdió, reiniciar la racha
       consecutiveWins = 0;
+      lastGameWon = false;
+      console.log(`${player} ha perdido, racha reiniciada.`);
     }
+
+    // Actualizar la máxima racha de victorias consecutivas
+    maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins);
+    console.log(`Máxima racha hasta ahora para ${player}: ${maxConsecutiveWins}`);
   });
 
-  return consecutiveWins; // Devolver la racha de victorias consecutivas actual, no la máxima
+  console.log(`Racha máxima final de victorias consecutivas para ${player}: ${maxConsecutiveWins}`);
+  return consecutiveWins; // Devolver la racha de victorias consecutivas actual
 };
 
 const Players = () => {
@@ -126,7 +154,7 @@ const Players = () => {
     const fetchResults = async () => {
       const querySnapshot = await getDocs(collection(db, "results"));
       const fetchedResults = querySnapshot.docs.map(doc => doc.data());
-      
+
       // Filtrar resultados que tienen una fecha válida
       const validResults = fetchedResults.filter(result => result.date);
 
@@ -137,25 +165,27 @@ const Players = () => {
     fetchResults();
   }, []);
 
+  // En la función calculateStats, verifica y corrige la asignación de las victorias:
+
   const calculateStats = (results) => {
     const stats = {};
     const pairStats = {};
-
+  
     results.forEach(result => {
       const { pair1, pair2, sets } = result;
-
-      // Inicializamos el estado de las estadísticas del jugador si no existen
+  
+      // Asegúrate de inicializar las estadísticas correctamente para cada jugador
       [pair1.player1, pair1.player2, pair2.player1, pair2.player2].forEach(player => {
         if (!stats[player]) {
           stats[player] = { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
         }
-        stats[player].gamesPlayed += 1;  // Incrementamos juegos jugados para todos
+        stats[player].gamesPlayed += 1;
       });
-
-      // Contar los sets ganados por cada pareja
+  
+      // Revisión de los sets ganados por cada pareja
       let pair1Wins = 0;
       let pair2Wins = 0;
-
+  
       sets.forEach(set => {
         if (set.pair1Score > set.pair2Score) {
           pair1Wins += 1;
@@ -163,68 +193,60 @@ const Players = () => {
           pair2Wins += 1;
         }
       });
-
-      // Determinamos quién ganó basándonos en la cantidad de sets ganados
+  
+      // Determina si la pareja 1 o la pareja 2 ganó
       if (pair1Wins > pair2Wins) {
-        stats[pair1.player1].gamesWon += 1;  // Si pareja 1 ganó, sumamos la victoria a sus jugadores
+        stats[pair1.player1].gamesWon += 1;
         stats[pair1.player2].gamesWon += 1;
-        stats[pair2.player1].gamesLost += 1;  // Si pareja 2 perdió, sumamos la derrota a sus jugadores
+        stats[pair2.player1].gamesLost += 1;
         stats[pair2.player2].gamesLost += 1;
       } else {
-        stats[pair2.player1].gamesWon += 1;  // Si pareja 2 ganó, sumamos la victoria a sus jugadores
+        stats[pair2.player1].gamesWon += 1;
         stats[pair2.player2].gamesWon += 1;
-        stats[pair1.player1].gamesLost += 1;  // Si pareja 1 perdió, sumamos la derrota a sus jugadores
+        stats[pair1.player1].gamesLost += 1;
         stats[pair1.player2].gamesLost += 1;
       }
-
-      // Calcular victorias consecutivas correctamente para cada jugador
-      stats[pair1.player1].consecutiveWins = calculateConsecutiveWins(results, pair1.player1);
-      stats[pair1.player2].consecutiveWins = calculateConsecutiveWins(results, pair1.player2);
-      stats[pair2.player1].consecutiveWins = calculateConsecutiveWins(results, pair2.player1);
-      stats[pair2.player2].consecutiveWins = calculateConsecutiveWins(results, pair2.player2);
-
-      // Normalizar el nombre de la pareja para estadísticas de parejas
-      const normalizePairKey = (player1, player2) => {
-        return [player1, player2].sort().join('-');
-      };
-
+  
+      // Calcula las estadísticas de las parejas
       const pairKey1 = normalizePairKey(pair1.player1, pair1.player2);
       const pairKey2 = normalizePairKey(pair2.player1, pair2.player2);
-
+  
       if (!pairStats[pairKey1]) {
         pairStats[pairKey1] = { gamesWon: 0, gamesPlayed: 0 };
       }
       if (!pairStats[pairKey2]) {
         pairStats[pairKey2] = { gamesWon: 0, gamesPlayed: 0 };
       }
-
+  
       pairStats[pairKey1].gamesPlayed += 1;
       pairStats[pairKey2].gamesPlayed += 1;
-
+  
       if (pair1Wins > pair2Wins) {
         pairStats[pairKey1].gamesWon += 1;
       } else {
         pairStats[pairKey2].gamesWon += 1;
       }
     });
-
-    // Calcular eficacia para cada jugador
+  
+    // Calcula la eficiencia de cada jugador
     Object.keys(stats).forEach(player => {
       const { gamesWon, gamesPlayed } = stats[player];
       stats[player].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
+  
+      // Calcula las victorias consecutivas para cada jugador usando calculateConsecutiveWins
+      stats[player].consecutiveWins = calculateConsecutiveWins(results, player); // Añade este paso
     });
-
-    // Calcular eficacia para cada pareja
+  
+    // Calcula la eficiencia de cada pareja
     Object.keys(pairStats).forEach(pair => {
       const { gamesWon, gamesPlayed } = pairStats[pair];
       pairStats[pair].efficiency = ((gamesWon / gamesPlayed) * 100).toFixed(2);
     });
-
+  
     setPlayerStats(stats);
     setPairStats(pairStats);
   };
-
-  // Filtrar jugadores que han jugado al menos un partido
+  
   const rankedPlayers = calculateRanking(
     Object.keys(playerStats).map(player => ({
       ...playersInfo[player],
@@ -298,6 +320,9 @@ const Players = () => {
 
               {selectedPlayer?.name === playersInfo[key].name && (
                 <CardContent>
+                  {console.log(`Mostrando estadísticas para el jugador: ${key}`)}
+                  {console.log(`Victorias consecutivas: ${playerStats[key]?.consecutiveWins || 0}`)}
+                  {console.log(`Partidos jugados: ${playerStats[key]?.gamesPlayed || 0}, Partidos ganados: ${playerStats[key]?.gamesWon || 0}`)}
                   <Typography variant="body2">
                     Posición: {playersInfo[key].position} <br />
                     Fecha de nacimiento: {playersInfo[key].birthDate} <br />
