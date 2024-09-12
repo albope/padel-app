@@ -1,70 +1,85 @@
-# Getting Started with Create React App
+# Padel App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Padel App** es una aplicación web progresiva (PWA) diseñada para gestionar y visualizar partidas de pádel. Los jugadores pueden ver el historial de partidos, rankings y estadísticas. La aplicación está optimizada para dispositivos móviles y se puede instalar como una app nativa en el dispositivo del usuario.
 
-## Available Scripts
+## Características
 
-In the project directory, you can run:
+- **Historial de Partidos**: Visualización de partidas anteriores, filtradas por mes y ordenadas por fecha.
+- **Ranking de Jugadores**: Muestra el ranking de los jugadores en base a los partidos ganados y su eficiencia.
+- **Partidas por Parejas**: Gestiona y muestra estadísticas de las partidas jugadas en parejas.
+- **PWA**: La app está diseñada como una aplicación web progresiva (PWA), lo que permite que los usuarios la instalen en sus dispositivos móviles.
+- **Firebase Integration**: Utiliza Firebase para gestionar la base de datos de resultados y el despliegue del proyecto.
 
-### `npm start`
+## Tecnologías utilizadas
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **React**: Framework de JavaScript para construir la interfaz de usuario.
+- **Material UI**: Biblioteca de componentes de React para un diseño moderno y responsivo.
+- **Firebase**: 
+  - **Firestore**: Para almacenar y gestionar los resultados de los partidos.
+  - **Firebase Hosting**: Despliegue y alojamiento de la aplicación.
+  - **Firebase Authentication**: Para manejar la autenticación de usuarios (opcional).
+- **Day.js**: Biblioteca para el manejo de fechas.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Instalación y Ejecución
 
-### `npm test`
+Sigue estos pasos para instalar y ejecutar el proyecto en tu entorno local.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### Clonar el repositorio
 
-### `npm run build`
+```bash
+git clone https://github.com/albope/padel-app.git
+cd padel-app
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Instalar dependencias
+Asegúrate de tener Node.js instalado en tu sistema, y luego ejecuta:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```bash
+npm install
+```
+## Ejecutar en modo desarrollo
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Para iniciar la aplicación en modo desarrollo, ejecuta:
 
-### `npm run eject`
+```bash
+npm start
+```
+La app estará disponible en http://localhost:3000.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Despliegue
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+La aplicación está desplegada utilizando Firebase Hosting. Sigue estos pasos para desplegar tu propia versión de la aplicación.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
 
-## Learn More
+## Construir la aplicación para producción
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Ejecuta el siguiente comando para generar una versión optimizada en la carpeta build:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+npm run build
+```
+## Desplegar en Firebase
 
-### Code Splitting
+Asegúrate de tener Firebase CLI instalado y configurado con tu proyecto. Luego, puedes desplegar la aplicación con:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```bash
+firebase deploy
+```
 
-### Analyzing the Bundle Size
+## Scripts Disponibles
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+En el proyecto, puedes ejecutar los siguientes comandos:
 
-### Making a Progressive Web App
+npm start: Inicia el servidor de desarrollo.
+npm run build: Construye la aplicación para producción en la carpeta build.
+npm run test: Ejecuta las pruebas unitarias.
+firebase deploy: Despliega la aplicación en Firebase Hosting.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Contribuir
 
-### Advanced Configuration
+Las contribuciones son bienvenidas. Si encuentras algún problema o tienes sugerencias para mejorar el proyecto, abre un issue o envía un pull request.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## Licencia
 
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Este proyecto está bajo la licencia MIT. Puedes ver más detalles en el archivo LICENSE.
