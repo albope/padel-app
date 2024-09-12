@@ -126,7 +126,7 @@ const ResultsList = () => {
           paginatedResults.map((result) => (
             <Grid item xs={12} key={result.id}>
               <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
-                
+
                 {/* Icono de eliminar */}
                 <IconButton
                   onClick={() => handleDeleteResult(result.id)}
@@ -185,9 +185,24 @@ const ResultsList = () => {
             </Grid>
           ))
         ) : (
-          <Typography variant="body1" sx={{ marginTop: '20px', textAlign: 'center' }}> {/* Mensaje centrado */}
-            No hay resultados disponibles
-          </Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '100%',
+                marginTop: '20px'
+              }}
+            >
+              <Typography
+                variant="body1"
+                sx={{
+                  textAlign: 'center'
+                }}
+              >
+                No hay resultados disponibles
+              </Typography>
+            </Box>
         )}
       </Grid>
 
