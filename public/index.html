@@ -1,14 +1,20 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    
+
     <!-- Actualiza el título -->
     <title>Padel Mas Camarena</title>
 
     <!-- Agrega el favicon -->
     <link rel="icon" href="%PUBLIC_URL%/pelota-de-padel.ico" type="image/x-icon">
+
+    <!-- Enlaza el manifest.json para PWA -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json">
+
+    <!-- Define el color del tema para la barra de la app en móviles -->
+    <meta name="theme-color" content="#000000" />
 
     <style media="screen">
       body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
@@ -32,6 +38,21 @@
       document.addEventListener('DOMContentLoaded', function() {
         console.log('Firebase SDK loaded with the modular approach.');
       });
+    </script>
+    
+    <!-- Registra el service worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('%PUBLIC_URL%/service-worker.js')
+          .then(registration => {
+            console.log('Service Worker registrado con éxito:', registration);
+          })
+          .catch(error => {
+            console.error('Error al registrar el Service Worker:', error);
+          });
+        });
+      }
     </script>
   </body>
 </html>
