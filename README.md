@@ -1,6 +1,6 @@
 # Padel App
 
-**Padel App** es una aplicación web progresiva (PWA) diseñada para gestionar y visualizar partidas de pádel. Los jugadores pueden ver el historial de partidos, rankings y estadísticas. La aplicación está optimizada para dispositivos móviles y se puede instalar como una app nativa en el dispositivo del usuario.
+**Padel App** es una aplicación web progresiva (PWA) diseñada para gestionar y visualizar resultados de partidas de pádel con tus amigos. Los jugadores pueden ver el historial de partidos, rankings y estadísticas. La aplicación está optimizada para dispositivos móviles y se puede instalar como una app nativa en el dispositivo del usuario.
 
 ## Características
 
