@@ -192,25 +192,27 @@ const ResultsList = () => {
       </Grid>
 
       {/* Paginación */}
-      <Box sx={{ textAlign: 'center', marginTop: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <IconButton
-          onClick={handlePreviousPage}
-          disabled={currentPage <= 1}
-        >
-          <ArrowBackIcon />
-        </IconButton>
+      {filteredResults.length > 0 && (
+        <Box sx={{ textAlign: 'center', marginTop: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <IconButton
+            onClick={handlePreviousPage}
+            disabled={currentPage <= 1}
+          >
+            <ArrowBackIcon />
+          </IconButton>
 
-        <Typography variant="body1" sx={{ marginLeft: '10px', marginRight: '10px' }}>
-          Página {currentPage} de {totalPages}
-        </Typography>
+          <Typography variant="body1" sx={{ marginLeft: '10px', marginRight: '10px' }}>
+            Página {currentPage} de {totalPages}
+          </Typography>
 
-        <IconButton
-          onClick={handleNextPage}
-          disabled={currentPage >= totalPages}
-        >
-          <ArrowForwardIcon />
-        </IconButton>
-      </Box>
+          <IconButton
+            onClick={handleNextPage}
+            disabled={currentPage >= totalPages}
+          >
+            <ArrowForwardIcon />
+          </IconButton>
+        </Box>
+      )}
 
       {/* Botón para añadir resultado */}
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
