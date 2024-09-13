@@ -1,5 +1,21 @@
+/* Aplica un fondo gris suave similar al footer */
+body, html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #ECEFF1; /* Gris suave */
+}
+
 .App {
   text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  /* Fondo gris aplicado a toda la app */
+  background-color: #ECEFF1; /* Asegúrate de que coincida con el gris del footer */
 }
 
 .App-logo {
@@ -14,8 +30,6 @@
 }
 
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -34,5 +48,11 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+/* Asegurar que el fondo sea blanco en dispositivos móviles */
+@media screen and (max-width: 768px) {
+  body {
+    background-color: white !important;
   }
 }
