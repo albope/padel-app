@@ -178,10 +178,10 @@ const Insignias = () => {
   return (
     <Container>
       {/* Encabezado con fondo negro solo alrededor del título */}
-      <Box sx={{ backgroundColor: 'black', padding: '20px', textAlign: 'center', color: 'white' }}>
-        <Typography variant="h4" sx={{ borderBottom: 'none' }}>Insignias</Typography>
+      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px'  }}>
+        <Typography variant="h5">Insignias</Typography>
       </Box>
-
+      
       {/* Texto debajo del título */}
       <Box sx={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
         <Typography variant="body1">¡Consulta tus logros desbloqueados!</Typography>

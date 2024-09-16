@@ -110,21 +110,6 @@ const HomePage = () => {
 
       <ResultsList />
 
-      {/* Botón flotante para Insignias */}
-      <Box sx={{ position: 'fixed', bottom: 80, right: 20, textAlign: 'center' }}>
-        <IconButton
-          onClick={() => navigate('/insignias')}
-          sx={{
-            backgroundColor: 'black',
-            color: 'white',
-            borderRadius: '50%',
-            padding: '15px',
-          }}
-        >
-          <EmojiEventsIcon fontSize="large" sx={{ color: 'white' }} />
-        </IconButton>
-      </Box>
-
       {/* Botón flotante para Información de las partidas */}
       <Box sx={{ position: 'fixed', bottom: 20, right: 20, textAlign: 'center' }}>
         <IconButton
