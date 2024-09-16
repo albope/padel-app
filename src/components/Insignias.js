@@ -128,8 +128,8 @@ const Insignias = () => {
 
   const achievements = {
     gamesPlayed: [10, 25, 50],
-    gamesWon: [5, 15, 30],
-    partners: [1, 2, 3],
+    gamesWon: [10, 20, 30],
+    partners: [2, 3, 4],
     efficiency: [50, 70, 90],
     longestStreak: [3, 5, 10],
   };
@@ -181,7 +181,7 @@ const Insignias = () => {
       <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px'  }}>
         <Typography variant="h5">Insignias</Typography>
       </Box>
-      
+
       {/* Texto debajo del título */}
       <Box sx={{ textAlign: 'center', marginTop: '10px', marginBottom: '20px' }}>
         <Typography variant="body1">¡Consulta tus logros desbloqueados!</Typography>
