@@ -6,10 +6,12 @@ import StatsChart from './components/StatsChart';
 import MatchInfo from './components/MatchInfo';
 import Players from './components/Players';
 import Insignias from './components/Insignias';
+import ScrollToTop from './components/ScrollToTop'; // Importa el nuevo componente
 
 const App = () => {
   return (
     <Router>
+      <ScrollToTop /> {/* Añadimos el componente aquí */}
       <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         {/* Contenido de la app */}
         <div style={{ flex: '1' }}>
@@ -19,7 +21,7 @@ const App = () => {
             <Route path="/stats" element={<StatsChart />} />
             <Route path="/info" element={<MatchInfo />} />
             <Route path="/players" element={<Players />} />
-            <Route path="/insignias" element={<Insignias />} />            
+            <Route path="/insignias" element={<Insignias />} />
           </Routes>
         </div>
 
@@ -32,4 +34,4 @@ const App = () => {
   );
 };
 
-export default App;    
+export default App;
