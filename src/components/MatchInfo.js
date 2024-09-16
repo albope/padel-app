@@ -1,3 +1,5 @@
+// MatchInfo.js
+
 import React from 'react';
 import { Container, Typography, Box, Button } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'; // Icono de campana
@@ -33,6 +35,7 @@ const MatchInfo = () => {
             style={{ border: 0 }}
             allowFullScreen=""
             loading="lazy"
+            title="Mapa Elite Padel 22"
           ></iframe>
         </Box>
 
@@ -71,6 +74,7 @@ const MatchInfo = () => {
             style={{ border: 0 }}
             allowFullScreen=""
             loading="lazy"
+            title="Mapa Passing Padel"
           ></iframe>
         </Box>
 
@@ -94,7 +98,7 @@ const MatchInfo = () => {
       </Box>
 
       {/* Botón para volver a la pantalla principal */}
-      <Box sx={{ textAlign: 'center', marginTop: '30px' }}>
+      <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
         <Button
           variant="contained"
           sx={{

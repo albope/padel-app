@@ -18,9 +18,9 @@ code {
   box-sizing: border-box;
 }
 
-/* Optional mobile-specific styles */
+/* Asegurar que el fondo sea blanco en dispositivos móviles */
 @media screen and (max-width: 768px) {
   body {
-    background-color: white; /* Ensure no unwanted colors */
+    background-color: white !important;
   }
 }

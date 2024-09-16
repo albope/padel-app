@@ -50,3 +50,9 @@ body, html {
     transform: rotate(360deg);
   }
 }
+/* Asegurar que el fondo sea blanco en dispositivos móviles */
+@media screen and (max-width: 768px) {
+  body {
+    background-color: white !important;
+  }
+}
