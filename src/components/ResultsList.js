@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton } from '@mui/material';
-import { CheckCircle } from '@mui/icons-material';
+import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
+import { EmojiEvents } from '@mui/icons-material'; // Importamos el ícono de trofeo
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs'; // Para manejar fechas
@@ -136,73 +136,117 @@ const ResultsList = () => {
       {/* Lista de partidos */}
       <Grid container spacing={2} sx={{ marginTop: 2 }}>
         {paginatedResults.length > 0 ? (
-          paginatedResults.map((result) => (
-            <Grid item xs={12} key={result.id}>
-              <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
+          paginatedResults.map((result) => {
+            // Determinar si hay un tercer set
+            const hasThirdSet = result.sets && result.sets.length === 3;
 
-                {/* Icono de eliminar */}
-                <IconButton
-                  onClick={() => handleDeleteResult(result.id, result)}
-                  sx={{ position: 'absolute', top: '10px', right: '10px', color: 'red' }}
-                >
-                  <DeleteIcon />
-                </IconButton>
+            return (
+              <Grid item xs={12} key={result.id}>
+                <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
 
-                <CardContent>
-                  <Typography variant="h6" color="textSecondary" gutterBottom>
-                    <strong>{dayjs(result.date).format('DD-MM-YYYY')}</strong> - <strong>{result.location || 'N/A'}</strong>
-                  </Typography>
+                  {/* Icono de eliminar */}
+                  <IconButton
+                    onClick={() => handleDeleteResult(result.id, result)}
+                    sx={{ position: 'absolute', top: '10px', right: '10px', color: 'red' }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
 
-                  <Grid container>
-                    {/* Ajuste para dispositivos móviles */}
-                    <Grid item xs={12} sm={8}>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          color: isWinner('pair1', result.sets) ? 'green' : 'black',
-                          fontWeight: isWinner('pair1', result.sets) ? 'bold' : 'normal',
-                          display: 'flex',
-                          alignItems: 'center',
-                          flexWrap: 'wrap', // Permitir que el texto se ajuste
-                        }}
-                      >
-                        <strong>Pareja 1:</strong>&nbsp;
-                        {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}
-                        {isWinner('pair1', result.sets) && <CheckCircle sx={{ color: 'green', ml: 1 }} />}
-                      </Typography>
-                      <Typography
-                        variant="body1"
-                        sx={{
-                          color: isWinner('pair2', result.sets) ? 'green' : 'black',
-                          fontWeight: isWinner('pair2', result.sets) ? 'bold' : 'normal',
-                          display: 'flex',
-                          alignItems: 'center',
-                          flexWrap: 'wrap', // Permitir que el texto se ajuste
-                          mt: 1, // Añadir margen superior para separación
-                        }}
-                      >
-                        <strong>Pareja 2:</strong>&nbsp;
-                        {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}
-                        {isWinner('pair2', result.sets) && <CheckCircle sx={{ color: 'green', ml: 1 }} />}
-                      </Typography>
-                    </Grid>
+                  <CardContent>
+                    {/* Fecha y ubicación */}
+                    <Typography variant="h6" color="textSecondary" gutterBottom>
+                      <strong>{dayjs(result.date).format('DD-MM-YYYY')}</strong> - <strong>{result.location || 'N/A'}</strong>
+                    </Typography>
 
-                    <Grid item xs={12} sm={4}>
-                      {result.sets && result.sets.length > 0 ? (
-                        result.sets.map((set, index) => (
-                          <Typography key={index} variant="h6" align="center" sx={{ borderBottom: index !== result.sets.length - 1 ? '1px solid #ddd' : 'none' }}>
-                            {set.pair1Score || 0} - {set.pair2Score || 0}
-                          </Typography>
-                        ))
-                      ) : (
-                        <Typography variant="body2">Sin sets disponibles</Typography>
-                      )}
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))
+                    {/* Tabla de resultados */}
+                    <TableContainer component={Paper} sx={{ marginTop: '20px' }}>
+                      <Table aria-label="resultados de partidos">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell><strong>Pareja</strong></TableCell>
+                            <TableCell align="center"><strong>Set 1</strong></TableCell>
+                            <TableCell align="center"><strong>Set 2</strong></TableCell>
+                            {hasThirdSet && <TableCell align="center"><strong>Set 3</strong></TableCell>}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {/* Fila de Pareja 1 */}
+                          <TableRow
+                            sx={{
+                              backgroundColor: isWinner('pair1', result.sets) ? '#d4edda' : 'inherit',
+                            }}
+                          >
+                            <TableCell
+                              component="th"
+                              scope="row"
+                              sx={{
+                                fontWeight: isWinner('pair1', result.sets) ? 'bold' : 'normal',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                            >
+                              {isWinner('pair1', result.sets) && (
+                                <EmojiEvents sx={{ color: '#ffc107', marginRight: '5px' }} />
+                              )}
+                              {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}
+                            </TableCell>
+                            {result.sets.map((set, index) => (
+                              <TableCell
+                                key={index}
+                                align="center"
+                                sx={{
+                                  fontWeight: isWinner('pair1', result.sets) ? 'bold' : 'normal',
+                                }}
+                              >
+                                {set.pair1Score || 0}
+                              </TableCell>
+                            ))}
+                            {/* Celdas vacías si no hay tercer set */}
+                            {!hasThirdSet && <TableCell align="center">{' '}</TableCell>}
+                          </TableRow>
+                          {/* Fila de Pareja 2 */}
+                          <TableRow
+                            sx={{
+                              backgroundColor: isWinner('pair2', result.sets) ? '#d4edda' : 'inherit',
+                            }}
+                          >
+                            <TableCell
+                              component="th"
+                              scope="row"
+                              sx={{
+                                fontWeight: isWinner('pair2', result.sets) ? 'bold' : 'normal',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                            >
+                              {isWinner('pair2', result.sets) && (
+                                <EmojiEvents sx={{ color: '#ffc107', marginRight: '5px' }} />
+                              )}
+                              {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}
+                            </TableCell>
+                            {result.sets.map((set, index) => (
+                              <TableCell
+                                key={index}
+                                align="center"
+                                sx={{
+                                  fontWeight: isWinner('pair2', result.sets) ? 'bold' : 'normal',
+                                }}
+                              >
+                                {set.pair2Score || 0}
+                              </TableCell>
+                            ))}
+                            {/* Celdas vacías si no hay tercer set */}
+                            {!hasThirdSet && <TableCell align="center">{' '}</TableCell>}
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })
         ) : (
           <Box
             sx={{
