@@ -154,7 +154,8 @@ const ResultsList = () => {
                   </Typography>
 
                   <Grid container>
-                    <Grid item xs={8}>
+                    {/* Ajuste para dispositivos móviles */}
+                    <Grid item xs={12} sm={8}>
                       <Typography
                         variant="body1"
                         sx={{
@@ -162,9 +163,11 @@ const ResultsList = () => {
                           fontWeight: isWinner('pair1', result.sets) ? 'bold' : 'normal',
                           display: 'flex',
                           alignItems: 'center',
+                          flexWrap: 'wrap', // Permitir que el texto se ajuste
                         }}
                       >
-                        <strong>Pareja 1:</strong> {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}{' '}
+                        <strong>Pareja 1:</strong>&nbsp;
+                        {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}
                         {isWinner('pair1', result.sets) && <CheckCircle sx={{ color: 'green', ml: 1 }} />}
                       </Typography>
                       <Typography
@@ -174,14 +177,17 @@ const ResultsList = () => {
                           fontWeight: isWinner('pair2', result.sets) ? 'bold' : 'normal',
                           display: 'flex',
                           alignItems: 'center',
+                          flexWrap: 'wrap', // Permitir que el texto se ajuste
+                          mt: 1, // Añadir margen superior para separación
                         }}
                       >
-                        <strong>Pareja 2:</strong> {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}{' '}
+                        <strong>Pareja 2:</strong>&nbsp;
+                        {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}
                         {isWinner('pair2', result.sets) && <CheckCircle sx={{ color: 'green', ml: 1 }} />}
                       </Typography>
                     </Grid>
 
-                    <Grid item xs={4}>
+                    <Grid item xs={12} sm={4}>
                       {result.sets && result.sets.length > 0 ? (
                         result.sets.map((set, index) => (
                           <Typography key={index} variant="h6" align="center" sx={{ borderBottom: index !== result.sets.length - 1 ? '1px solid #ddd' : 'none' }}>
@@ -198,24 +204,24 @@ const ResultsList = () => {
             </Grid>
           ))
         ) : (
-            <Box
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              width: '100%',
+              marginTop: '20px'
+            }}
+          >
+            <Typography
+              variant="body1"
               sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '100%',
-                marginTop: '20px'
+                textAlign: 'center'
               }}
             >
-              <Typography
-                variant="body1"
-                sx={{
-                  textAlign: 'center'
-                }}
-              >
-                No hay resultados disponibles
-              </Typography>
-            </Box>
+              No hay resultados disponibles
+            </Typography>
+          </Box>
         )}
       </Grid>
 
