@@ -75,9 +75,9 @@ const ResultForm = () => {
 
   // Filtrar jugadores disponibles para evitar la selección del mismo jugador en la misma pareja y entre ambas parejas
   const filterAvailablePlayers = (selectedPlayer, currentPlayer, otherPairPlayers) => {
-    return players.filter((player) => 
-      player !== selectedPlayer && 
-      !otherPairPlayers.includes(player) || 
+    return players.filter((player) =>
+      player !== selectedPlayer &&
+      !otherPairPlayers.includes(player) ||
       player === currentPlayer
     );
   };
@@ -99,13 +99,21 @@ const ResultForm = () => {
 
       {/* Formulario de las parejas */}
       <Grid container spacing={2} style={{ marginTop: '20px' }}>
+        {/* Pareja 1 - Jugador 1 */}
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true}>Pareja 1 - Jugador 1</InputLabel>
+            <InputLabel
+              id="pair1-player1-label"
+              sx={{ fontSize: '0.800rem' }} // Reducir tamaño de fuente
+            >
+              Pareja 1 - Jugador 1
+            </InputLabel>
             <Select
+              labelId="pair1-player1-label"
               value={pair1.player1}
               onChange={(e) => handlePlayerChange('pair1', 'player1', e.target.value)}
               fullWidth
+              label="Pareja 1 - Jugador 1"
             >
               {filterAvailablePlayers(pair1.player2, pair1.player1, [pair2.player1, pair2.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
@@ -113,13 +121,21 @@ const ResultForm = () => {
             </Select>
           </FormControl>
         </Grid>
+        {/* Pareja 1 - Jugador 2 */}
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true}>Pareja 1 - Jugador 2</InputLabel>
+            <InputLabel
+              id="pair1-player2-label"
+              sx={{ fontSize: '0.800rem' }} // Reducir tamaño de fuente
+            >
+              Pareja 1 - Jugador 2
+            </InputLabel>
             <Select
+              labelId="pair1-player2-label"
               value={pair1.player2}
               onChange={(e) => handlePlayerChange('pair1', 'player2', e.target.value)}
               fullWidth
+              label="Pareja 1 - Jugador 2"
             >
               {filterAvailablePlayers(pair1.player1, pair1.player2, [pair2.player1, pair2.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
@@ -127,15 +143,21 @@ const ResultForm = () => {
             </Select>
           </FormControl>
         </Grid>
-
-        {/* Pareja 2 */}
+        {/* Pareja 2 - Jugador 1 */}
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true}>Pareja 2 - Jugador 1</InputLabel>
+            <InputLabel
+              id="pair2-player1-label"
+              sx={{ fontSize: '0.800rem' }} // Reducir tamaño de fuente
+            >
+              Pareja 2 - Jugador 1
+            </InputLabel>
             <Select
+              labelId="pair2-player1-label"
               value={pair2.player1}
               onChange={(e) => handlePlayerChange('pair2', 'player1', e.target.value)}
               fullWidth
+              label="Pareja 2 - Jugador 1"
             >
               {filterAvailablePlayers(pair2.player2, pair2.player1, [pair1.player1, pair1.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
@@ -143,13 +165,21 @@ const ResultForm = () => {
             </Select>
           </FormControl>
         </Grid>
+        {/* Pareja 2 - Jugador 2 */}
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginBottom: '20px' }}>
-            <InputLabel shrink={true}>Pareja 2 - Jugador 2</InputLabel>
+            <InputLabel
+              id="pair2-player2-label"
+              sx={{ fontSize: '0.800rem' }} // Reducir tamaño de fuente
+            >
+              Pareja 2 - Jugador 2
+            </InputLabel>
             <Select
+              labelId="pair2-player2-label"
               value={pair2.player2}
               onChange={(e) => handlePlayerChange('pair2', 'player2', e.target.value)}
               fullWidth
+              label="Pareja 2 - Jugador 2"
             >
               {filterAvailablePlayers(pair2.player1, pair2.player2, [pair1.player1, pair1.player2]).map((player) => (
                 <MenuItem key={player} value={player}>{player}</MenuItem>
@@ -174,11 +204,18 @@ const ResultForm = () => {
         </Grid>
         <Grid item xs={6}>
           <FormControl fullWidth style={{ marginTop: '16px' }}>
-            <InputLabel shrink={true}>Lugar</InputLabel>
+            <InputLabel
+              id="location-label"
+              sx={{ fontSize: '0.875rem' }} // Reducir tamaño de fuente
+            >
+              Lugar
+            </InputLabel>
             <Select
+              labelId="location-label"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               fullWidth
+              label="Lugar"
             >
               {locations.map((place) => (
                 <MenuItem key={place} value={place}>{place}</MenuItem>
@@ -231,10 +268,10 @@ const ResultForm = () => {
       {/* Botón para añadir tercer set */}
       {!showThirdSet && (
         <Box textAlign="center">
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             onClick={addThirdSet}
-            sx={{ backgroundColor: '#800080', color: '#FFFFFF', marginTop: '20px' }}
+            sx={{ backgroundColor: 'black', color: '#FFFFFF', marginTop: '20px' }}
           >
             Añadir Tercer Set
           </Button>
