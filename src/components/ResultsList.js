@@ -1,13 +1,15 @@
+// ResultsList.js
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs'; // Para manejar fechas
 import { useNavigate } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'; // Icono para ir hacia atrás
 
 const ResultsList = () => {
   const [results, setResults] = useState([]);
@@ -251,18 +253,60 @@ const ResultsList = () => {
         </Button>
       </Box>
 
-      {/* Nueva sección "Información de las Partidas" */}
-      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', '&:hover': { cursor: 'pointer', backgroundColor: '#333' } }} onClick={() => navigate('/info')}>
+      {/* Sección "Información de las Partidas" */}
+      <Box
+        sx={{
+          backgroundColor: 'black',
+          color: 'white',
+          padding: '10px',
+          textAlign: 'center',
+          marginTop: '20px',
+          borderRadius: '10px',
+          '&:hover': { cursor: 'pointer', backgroundColor: '#333' },
+        }}
+        onClick={() => navigate('/info')}
+      >
         <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           Información de las Partidas
           <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
         </Typography>
       </Box>
 
-      {/* Nueva sección "Ranking & Jugadores" */}
-      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', '&:hover': { cursor: 'pointer', backgroundColor: '#333' } }} onClick={() => navigate('/players')}>
+      {/* Sección "Ranking & Jugadores" */}
+      <Box
+        sx={{
+          backgroundColor: 'black',
+          color: 'white',
+          padding: '10px',
+          textAlign: 'center',
+          marginTop: '20px',
+          borderRadius: '10px',
+          '&:hover': { cursor: 'pointer', backgroundColor: '#333' },
+        }}
+        onClick={() => navigate('/players')}
+      >
         <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           Ranking & Jugadores
+          <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
+        </Typography>
+      </Box>
+
+      {/* Sección "Insignias" */}
+      <Box
+        sx={{
+          backgroundColor: 'black',
+          color: 'white',
+          padding: '10px',
+          textAlign: 'center',
+          marginTop: '20px',
+          marginBottom: '20px',
+          borderRadius: '10px',
+          '&:hover': { cursor: 'pointer', backgroundColor: '#333' },
+        }}
+        onClick={() => navigate('/insignias')}
+      >
+        <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          Insignias
           <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
         </Typography>
       </Box>

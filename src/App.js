@@ -5,6 +5,7 @@ import ResultForm from './components/ResultForm';
 import StatsChart from './components/StatsChart';
 import MatchInfo from './components/MatchInfo';
 import Players from './components/Players';
+import Insignias from './components/Insignias';
 
 const App = () => {
   return (
@@ -18,6 +19,7 @@ const App = () => {
             <Route path="/stats" element={<StatsChart />} />
             <Route path="/info" element={<MatchInfo />} />
             <Route path="/players" element={<Players />} />
+            <Route path="/insignias" element={<Insignias />} />            
           </Routes>
         </div>
 
@@ -30,4 +32,4 @@ const App = () => {
   );
 };
 
-export default App;
+export default App;    
