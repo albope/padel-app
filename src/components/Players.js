@@ -428,6 +428,7 @@ const Players = () => {
             No se han jugado partidos todavía
           </Typography>
         ) : (
+          
           rankedPairs.map((pair, index) => (
             <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
               <Card
@@ -454,7 +455,7 @@ const Players = () => {
           ))
         )}
       </Grid>
-
+      
       {/* Botón para volver a la página principal */}
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
         <Button
