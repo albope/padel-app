@@ -1,11 +1,10 @@
-// ResultsList.js
-
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Typography, Container, Grid, Card, CardContent, Box, Button, FormControl, Select, MenuItem, InputLabel, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
 import { EmojiEvents } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ShareIcon from '@mui/icons-material/Share';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +25,6 @@ const ResultsList = () => {
       const querySnapshot = await getDocs(collection(db, "results"));
       const resultsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Calcular los años disponibles dinámicamente
       const years = [...new Set(resultsData.map(result => dayjs(result.date).year()))].sort();
       setAvailableYears(years);
 
@@ -42,15 +40,13 @@ const ResultsList = () => {
       .filter(result => {
         const resultDate = dayjs(result.date);
 
-        // Si se selecciona "Año completo" (índice 12)
         if (month === 12) {
           return resultDate.year() === year;
         }
 
-        // Filtrar por mes y año
         return resultDate.month() === month && resultDate.year() === year;
       })
-      .sort((a, b) => dayjs(b.date).diff(dayjs(a.date))); // Ordenar por fecha (más reciente primero)
+      .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
 
     setFilteredResults(filtered);
     setCurrentPage(1);
@@ -100,10 +96,39 @@ const ResultsList = () => {
     return pair === 'pair1' ? pair1Wins > pair2Wins : pair2Wins > pair1Wins;
   };
 
+  const handleShareResult = (result) => {
+    const setsResults = result.sets
+      .map((set, index) => `  - *Set ${index + 1}:* ${set.pair1Score}-${set.pair2Score}`)
+      .join("\n");
+  
+    const winner =
+      isWinner("pair1", result.sets)
+        ? `*¡Victoria de ${result.pair1?.player1 || "N/A"} y ${result.pair1?.player2 || "N/A"}!*`
+        : `*¡Victoria de ${result.pair2?.player1 || "N/A"} y ${result.pair2?.player2 || "N/A"}!*`;
+  
+    const message = `
+  
+    Recordamos el resultado del último clásico jugado:
+  
+  *Fecha:* ${dayjs(result.date).format('DD-MM-YYYY')}
+  *Ubicación:* ${result.location || 'Desconocido'}
+  *Pareja 1:* ${result.pair1?.player1 || 'N/A'} y ${result.pair1?.player2 || 'N/A'}
+  *Pareja 2:* ${result.pair2?.player1 || 'N/A'} y ${result.pair2?.player2 || 'N/A'}
+  *Detalles:*
+  ${setsResults}
+  
+  ${winner}`;
+  
+    // Enlace codificado para WhatsApp
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+  
+        
   const months = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-    'Año completo' // Nueva opción
+    'Año completo'
   ];
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
@@ -170,12 +195,20 @@ const ResultsList = () => {
           paginatedResults.map((result) => (
             <Grid item xs={12} key={result.id}>
               <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
-                <IconButton
-                  onClick={() => handleDeleteResult(result.id, result)}
-                  sx={{ position: 'absolute', top: '10px', right: '10px', color: 'red' }}
-                >
-                  <DeleteIcon />
-                </IconButton>
+                <Box sx={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '10px' }}>
+                  <IconButton
+                    onClick={() => handleShareResult(result)}
+                    sx={{ color: 'green' }}
+                  >
+                    <ShareIcon />
+                  </IconButton>
+                  <IconButton
+                    onClick={() => handleDeleteResult(result.id, result)}
+                    sx={{ color: 'red' }}
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </Box>
                 <CardContent>
                   <Typography variant="h6" color="textSecondary" gutterBottom>
                     <strong>{dayjs(result.date).format('DD-MM-YYYY')}</strong> - <strong>{result.location || 'N/A'}</strong>
