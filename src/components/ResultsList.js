@@ -108,7 +108,7 @@ const ResultsList = () => {
   
     const message = `
   
-    Recordamos el resultado del último clásico jugado:
+    Resultado del último clásico jugado:
   
   *Fecha:* ${dayjs(result.date).format('DD-MM-YYYY')}
   *Ubicación:* ${result.location || 'Desconocido'}
