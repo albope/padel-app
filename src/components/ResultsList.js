@@ -25,15 +25,18 @@ const ResultsList = () => {
 
   const fetchResults = async () => {
     try {
-      const querySnapshot = await getDocs(collection(db, 'results'));
-      const resultsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const years = [...new Set(resultsData.map(result => dayjs(result.date).year()))].sort();
+      const querySnapshot = await getDocs(collection(db, "results"));
+      const resultsData = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      console.log("Resultados obtenidos:", resultsData); // Depuración
+
+      const years = [...new Set(resultsData.map((result) => dayjs(result.date).year()))].sort();
       setAvailableYears(years);
+
       setResults(resultsData);
-      setMatchHistory(resultsData);
-      filterResults(resultsData, dayjs().month(), dayjs().year());
+      setMatchHistory(resultsData); // Guarda el historial completo
+      filterResults(resultsData, currentMonth, currentYear); // Filtra los resultados
     } catch (error) {
-      console.error('Error al obtener los resultados:', error);
+      console.error("Error al obtener los resultados:", error);
     }
   };
 
@@ -102,35 +105,42 @@ const ResultsList = () => {
 
   const handleClone = async (result) => {
     try {
-      // Clonar los datos del resultado
-      const newResult = { ...result, date: result.date }; // Mantener la fecha original
-      delete newResult.id; // Eliminar ID original
-      await addDoc(collection(db, "results"), newResult);
-  
-      // Añadir el clon a la lista local (sin recargar los resultados globales)
-      const updatedResults = [...results, { ...newResult, id: "temp-id" }]; // Generar un ID temporal para evitar conflictos
-  
-      // Mantener el filtro actual basado en el mes y año seleccionados
-      setResults(updatedResults);
-      filterResults(updatedResults, currentMonth, currentYear);
+      // Copia el resultado y ajusta el campo 'date' al formato 'YYYY-MM-DD'
+      const newResult = {
+        ...result,
+        date: dayjs().format('YYYY-MM-DD') // Establece la nueva fecha en el formato correcto
+      };
+      delete newResult.id; // Elimina el ID original
+
+      // Agrega el nuevo documento a Firestore
+      const docRef = await addDoc(collection(db, "results"), newResult);
+      console.log("Documento clonado con ID:", docRef.id); // Verifica el nuevo ID
+
+      fetchResults(); // Actualiza la lista de resultados
     } catch (error) {
       console.error("Error al clonar el resultado:", error);
     }
   };
-  
-  const handleEdit = result => {
-    setEditingId(result.id);
-    setEditableResult({ ...result });
+
+  const handleEdit = (result) => {
+    setEditingId(result.id); // Asegúrate de que se establece el ID correcto
+    setEditableResult({ ...result }); // Mantén todos los datos del documento
   };
 
-  const handleSaveEdit = async id => {
+  const handleSaveEdit = async (id) => {
     try {
-      await updateDoc(doc(db, 'results', id), editableResult);
-      fetchResults();
-      setEditingId(null);
-      setEditableResult(null);
+      if (!id) {
+        throw new Error("El ID del documento es inválido.");
+      }
+      console.log("Intentando guardar el documento con ID:", id);
+      console.log("Datos a guardar:", editableResult);
+
+      await updateDoc(doc(db, "results", id), editableResult); // Actualiza el documento
+      fetchResults(); // Recarga la lista de resultados
+      setEditingId(null); // Finaliza la edición
+      setEditableResult(null); // Limpia los datos editables
     } catch (error) {
-      console.error('Error al guardar los cambios:', error);
+      console.error("Error al guardar los cambios:", error);
     }
   };
 
@@ -241,7 +251,15 @@ const ResultsList = () => {
           return (
             <Grid item xs={12} key={result.id}>
               <Card variant="outlined" sx={{ borderRadius: '10px', boxShadow: 2, backgroundColor: '#f9f9f9', padding: '10px', position: 'relative' }}>
-                <Box sx={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '10px' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap', // Permite que los botones se ajusten automáticamente
+                    gap: '10px',
+                    justifyContent: { xs: 'center', sm: 'flex-end' }, // Centrado en móviles, alineado a la derecha en pantallas grandes
+                    marginBottom: { xs: '10px', sm: '0' }, // Espacio en móviles
+                  }}
+                >
                   <IconButton onClick={() => handleShareResult(result)} sx={{ color: 'green' }}>
                     <ShareIcon />
                   </IconButton>
@@ -255,6 +273,8 @@ const ResultsList = () => {
                     <Edit />
                   </IconButton>
                 </Box>
+
+
                 {category && (
                   <Box sx={{ textAlign: 'center', padding: '5px', backgroundColor: '#eeeeee', borderRadius: '5px', marginBottom: '10px' }}>
                     {category.icon} <Typography variant="subtitle1" sx={{ display: 'inline', marginLeft: '5px' }}>{category.label}</Typography>
@@ -275,10 +295,10 @@ const ResultsList = () => {
                           <TextField
                             label={`Set ${index + 1} - Pareja 1`}
                             type="number"
-                            value={set.pair1Score || ''}
+                            value={set.pair1Score ?? ''} // Usamos ?? para permitir valores '0'
                             onChange={(e) => {
                               const updatedSets = [...editableResult.sets];
-                              updatedSets[index].pair1Score = parseInt(e.target.value, 10) || 0;
+                              updatedSets[index].pair1Score = e.target.value === '' ? '' : parseInt(e.target.value, 10); // No reemplazamos '0'
                               setEditableResult({ ...editableResult, sets: updatedSets });
                             }}
                             sx={{ flex: 1 }}
@@ -286,15 +306,16 @@ const ResultsList = () => {
                           <TextField
                             label={`Set ${index + 1} - Pareja 2`}
                             type="number"
-                            value={set.pair2Score || ''}
+                            value={set.pair2Score ?? ''} // Usamos ?? para permitir valores '0'
                             onChange={(e) => {
                               const updatedSets = [...editableResult.sets];
-                              updatedSets[index].pair2Score = parseInt(e.target.value, 10) || 0;
+                              updatedSets[index].pair2Score = e.target.value === '' ? '' : parseInt(e.target.value, 10); // No reemplazamos '0'
                               setEditableResult({ ...editableResult, sets: updatedSets });
                             }}
                             sx={{ flex: 1 }}
                           />
                         </Box>
+
                       ))}
                       <Button variant="contained" color="primary" onClick={() => handleSaveEdit(result.id)}>
                         Guardar
