@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'; // Icono para ir hacia atrás
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'; // Icono para ir hacia adelante
-import { Container, Typography, Box, IconButton, Button,SwipeableDrawer, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { Container, Typography, Box, IconButton, SwipeableDrawer, List, ListItem, ListItemText, Divider } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'; // Icono para Insignias
 import CloseIcon from '@mui/icons-material/Close';
 import ResultsList from './ResultsList';
 import { collection, getDocs } from 'firebase/firestore';
@@ -14,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs'; // Para formatear fechas
 
 const HomePage = () => {
-  const [totalGames, setTotalGames] = useState(0);
+  const [totalGamesByYear, setTotalGamesByYear] = useState({});
   const [locations, setLocations] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
@@ -25,20 +24,23 @@ const HomePage = () => {
   useEffect(() => {
     const fetchResults = async () => {
       const querySnapshot = await getDocs(collection(db, "results"));
-      const currentYear = new Date().getFullYear();
-
-      let gamesThisYear = 0;
+      
+      const gamesByYear = {};
       const uniqueLocations = new Set();
       const fetchedResults = [];
 
       querySnapshot.docs.forEach(doc => {
         const data = doc.data();
         const resultDate = new Date(data.date);
+        const resultYear = resultDate.getFullYear();
 
-        if (resultDate.getFullYear() === currentYear) {
-          gamesThisYear += 1;
+        // Actualizar el conteo de partidos por año
+        if (!gamesByYear[resultYear]) {
+          gamesByYear[resultYear] = 0;
         }
+        gamesByYear[resultYear] += 1;
 
+        // Actualizar localizaciones únicas
         if (data.location) {
           uniqueLocations.add(data.location);
         }
@@ -49,7 +51,7 @@ const HomePage = () => {
         });
       });
 
-      setTotalGames(gamesThisYear);
+      setTotalGamesByYear(gamesByYear);
       setLocations([...uniqueLocations]);
       setResults(fetchedResults);
     };
@@ -102,7 +104,13 @@ const HomePage = () => {
         <Typography
           variant="h5"
           component="h1"
-          sx={{ fontWeight: 'bold', letterSpacing: '1px', fontSize: '1.8rem', color: '#333', borderBottom: 'none' }}
+          sx={{
+            fontWeight: 'bold',
+            letterSpacing: '1px',
+            fontSize: '1.8rem',
+            color: '#333',
+            borderBottom: 'none',
+          }}
         >
           Padel Mas Camarena
         </Typography>
@@ -153,25 +161,42 @@ const HomePage = () => {
             <CloseIcon />
           </IconButton>
 
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+          <Typography
+            variant="h6"
+            gutterBottom
+            sx={{ fontWeight: 'bold', textAlign: 'center' }}
+          >
             Datos Temporada Actual
           </Typography>
 
           <Divider sx={{ marginBottom: '10px' }} />
 
-          {/* Partidos jugados */}
+          {/* Partidos jugados por año */}
           <List>
-            <ListItem>
-              <ListItemText
-                primary={<span style={{ fontWeight: 'bold' }}>Partidos jugados en {new Date().getFullYear()}: {totalGames}</span>}
-              />
-            </ListItem>
+            {Object.keys(totalGamesByYear).sort().map((year) => (
+              <ListItem key={year}>
+                <ListItemText
+                  primary={
+                    <span style={{ fontWeight: 'bold' }}>
+                      Partidos jugados en {year}: {totalGamesByYear[year]}
+                    </span>
+                  }
+                />
+              </ListItem>
+            ))}
           </List>
 
           <Divider sx={{ marginBottom: '10px' }} />
 
           {/* Localizaciones */}
-          <Typography variant="body1" sx={{ fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
+          <Typography
+            variant="body1"
+            sx={{
+              fontWeight: 'bold',
+              marginBottom: '10px',
+              textAlign: 'center',
+            }}
+          >
             Localizaciones
           </Typography>
           <List>
@@ -185,7 +210,14 @@ const HomePage = () => {
           <Divider sx={{ marginBottom: '10px' }} />
 
           {/* Resultados Añadidos */}
-          <Typography variant="body1" sx={{ fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>
+          <Typography
+            variant="body1"
+            sx={{
+              fontWeight: 'bold',
+              marginBottom: '10px',
+              textAlign: 'center',
+            }}
+          >
             Resultados Añadidos
           </Typography>
           <List>

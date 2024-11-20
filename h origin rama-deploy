@@ -1,0 +1,52 @@
+* [33m6949a3d[m[33m ([m[1;36mHEAD -> [m[1;32mrama-deploy[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m añadidos cambios a la partida del lunes
+*   [33ma8e251b[m Merge branch 'rama-deploy' into main
+[32m|[m[33m\[m  
+[32m|[m * [33me5c5368[m Añadir cambios en App.js
+[32m|[m * [33m5610033[m[33m ([m[1;31morigin/rama-deploy[m[33m)[m mejora viibilidad resultados II
+[32m|[m * [33m9f01193[m mejora viibilidad resultados
+[32m|[m * [33mcad3b8c[m perfilando sección Insignias v
+[32m|[m * [33m5d63d74[m perfilando sección Insignias IV
+[32m|[m * [33m8889482[m perfilando sección Insignias II
+[32m|[m * [33m512bef7[m perfilando sección Insignias
+[32m|[m *   [33m2c61991[m Resolved merge conflicts with rama-deploy
+[32m|[m [34m|[m[35m\[m  
+[32m|[m [34m|[m * [33m378548b[m apariencia alternativa
+* [34m|[m [35m|[m [33m417306f[m Se añade integración google calendar
+[34m|[m[34m/[m [35m/[m  
+* [35m|[m [33m6625f5f[m modifs 2
+* [35m|[m [33m8cd4bf6[m modifs
+* [35m|[m [33ma02849f[m mejoras funcionales web
+* [35m|[m [33mb8bedac[m mejoras funcionales web
+* [35m|[m [33m0394cc7[m[33m ([m[1;32mcambios-esteticos[m[33m)[m Update README.md
+* [35m|[m [33m08b60d3[m Update README.md
+[35m|[m[35m/[m  
+* [33m6c2fd76[m Deployment de la app II
+* [33m334b042[m Deployment de la app
+* [33mdd73d01[m Mejoras Esteticas II
+* [33m3f88275[m Logica partidos consecutivos mejora 5
+* [33m23179d5[m Logica partidos consecutivos mejora 4
+* [33mba6cf99[m Logica partidos consecutivos mejora III
+* [33m841bcad[m Logica partidos consecutivos mejora II
+* [33me932859[m Logica partidos consecutivos mejora
+* [33m48cfd03[m Logica partidos consecutivos II
+* [33m074db10[m Logica partidos consecutivos
+* [33m899937a[m Cambios página principal
+* [33m57cf021[m[33m ([m[1;31morigin/cambios-esteticos[m[33m)[m normalizacion de parejas 4
+* [33m7cb57df[m normalizacion de parejas 3
+* [33m2f42887[m normalizacion de parejas II
+* [33m3eb5c6d[m normalizacion de parejas
+* [33m811a4ce[m mejoras página principal III
+* [33md63efe2[m mejoras página principal II
+* [33m100579f[m mejoras página principal
+* [33m5411009[m mejoras esteticas ranking
+* [33m8c2e3a9[m Se añade Ranking
+* [33m21db03a[m Mejora página Jugadores
+* [33m99d4fe4[m mejoras funcionales 3
+* [33m9232b51[m mejoras funcionales II
+* [33m81f0249[m mejoras funcionales
+* [33m8a77d1d[m mejoras esteticas II
+* [33m38b4908[m mejoras esteticas
+* [33me336b20[m correción duplicidad de elementos
+* [33mf49798d[m initial commit
+* [33ma288908[m Implementación Inicial
+* [33me060857[m Initialize project using Create React App
