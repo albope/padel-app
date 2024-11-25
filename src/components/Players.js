@@ -261,6 +261,24 @@ const Players = () => {
     }))
   );
 
+  // Función para determinar si un jugador está empatado con el primero
+  const isPlayerTiedWithFirst = (player, firstPlayer) => {
+    if (!firstPlayer) return false;
+    return (
+      player.gamesWon === firstPlayer.gamesWon &&
+      parseFloat(player.efficiency) === parseFloat(firstPlayer.efficiency)
+    );
+  };
+
+  // Función para determinar si una pareja está empatada con la primera
+  const isPairTiedWithFirst = (pair, firstPair) => {
+    if (!firstPair) return false;
+    return (
+      pair.gamesWon === firstPair.gamesWon &&
+      parseFloat(pair.efficiency) === parseFloat(firstPair.efficiency)
+    );
+  };
+
   return (
     <Container>
       {/* Sección de Jugadores */}
@@ -381,39 +399,44 @@ const Players = () => {
             No se han jugado partidos todavía
           </Typography>
         ) : (
-          rankedPlayers.map((player, index) => (
-            <Grid item xs={12} key={`${player.name}-${index}`}>
-              <Card
-                sx={{
-                  backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es el primero
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '20px',
-                }}
-              >
-                <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
-                  {index + 1}
-                </Typography>
-                <CardMedia
-                  component="img"
-                  sx={{ width: '60px', height: '60px', borderRadius: '50%', marginRight: '20px' }}
-                  image={player.image}
-                  alt={player.name}
-                />
-                <Box>
-                  <Typography variant="h6">
-                    {player.name} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+          rankedPlayers.map((player, index) => {
+            const firstPlayer = rankedPlayers[0];
+            const isTiedWithFirst = isPlayerTiedWithFirst(player, firstPlayer);
+
+            return (
+              <Grid item xs={12} key={`${player.name}-${index}`}>
+                <Card
+                  sx={{
+                    backgroundColor: isTiedWithFirst ? 'lightgreen' : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '20px',
+                  }}
+                >
+                  <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                    {index + 1}
                   </Typography>
-                  <Typography variant="body2">{player.country}</Typography>
-                </Box>
-                <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
-                  <Typography variant="body2">
-                    {player.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
-                  </Typography>
-                </Box>
-              </Card>
-            </Grid>
-          ))
+                  <CardMedia
+                    component="img"
+                    sx={{ width: '60px', height: '60px', borderRadius: '50%', marginRight: '20px' }}
+                    image={player.image}
+                    alt={player.name}
+                  />
+                  <Box>
+                    <Typography variant="h6">
+                      {player.name} {isTiedWithFirst && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+                    </Typography>
+                    <Typography variant="body2">{player.country}</Typography>
+                  </Box>
+                  <Box sx={{ marginLeft: 'auto', textAlign: 'right' }}>
+                    <Typography variant="body2">
+                      {player.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{player.efficiency}%</span> eficacia
+                    </Typography>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })
         )}
       </Grid>
 
@@ -428,31 +451,35 @@ const Players = () => {
             No se han jugado partidos todavía
           </Typography>
         ) : (
-          
-          rankedPairs.map((pair, index) => (
-            <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
-              <Card
-                sx={{
-                  backgroundColor: index === 0 ? 'lightgreen' : 'transparent', // Fondo verde si es la primera pareja
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '20px',
-                }}
-              >
-                <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
-                  {index + 1}
-                </Typography>
-                <Box>
-                  <Typography variant="h6">
-                    {pair.players[0]} & {pair.players[1]} {index === 0 && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+          rankedPairs.map((pair, index) => {
+            const firstPair = rankedPairs[0];
+            const isTiedWithFirst = isPairTiedWithFirst(pair, firstPair);
+
+            return (
+              <Grid item xs={12} key={`${pair.players[0]}-${pair.players[1]}-${index}`}>
+                <Card
+                  sx={{
+                    backgroundColor: isTiedWithFirst ? 'lightgreen' : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '20px',
+                  }}
+                >
+                  <Typography variant="h4" sx={{ flex: '0 0 50px', textAlign: 'center', marginRight: '20px' }}>
+                    {index + 1}
                   </Typography>
-                  <Typography variant="body2">
-                    {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span> eficacia
-                  </Typography>
-                </Box>
-              </Card>
-            </Grid>
-          ))
+                  <Box>
+                    <Typography variant="h6">
+                      {pair.players[0]} & {pair.players[1]} {isTiedWithFirst && <EmojiEventsIcon sx={{ color: 'gold', marginLeft: '5px' }} />}
+                    </Typography>
+                    <Typography variant="body2">
+                      {pair.gamesWon} partidos ganados | <span style={{ fontWeight: 'bold' }}>{pair.efficiency}%</span> eficacia
+                    </Typography>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })
         )}
       </Grid>
       

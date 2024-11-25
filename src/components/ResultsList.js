@@ -254,10 +254,10 @@ const ResultsList = () => {
                 <Box
                   sx={{
                     display: 'flex',
-                    flexWrap: 'wrap', // Permite que los botones se ajusten automáticamente
+                    flexWrap: 'wrap',
                     gap: '10px',
-                    justifyContent: { xs: 'center', sm: 'flex-end' }, // Centrado en móviles, alineado a la derecha en pantallas grandes
-                    marginBottom: { xs: '10px', sm: '0' }, // Espacio en móviles
+                    justifyContent: { xs: 'center', sm: 'flex-end' },
+                    marginBottom: { xs: '10px', sm: '0' },
                   }}
                 >
                   <IconButton onClick={() => handleShareResult(result)} sx={{ color: 'green' }}>
@@ -273,7 +273,6 @@ const ResultsList = () => {
                     <Edit />
                   </IconButton>
                 </Box>
-
 
                 {category && (
                   <Box sx={{ textAlign: 'center', padding: '5px', backgroundColor: '#eeeeee', borderRadius: '5px', marginBottom: '10px' }}>
@@ -347,7 +346,9 @@ const ResultsList = () => {
                                 {isWinner('pair1', result.sets) && (
                                   <EmojiEvents sx={{ color: '#ffc107', marginRight: '5px' }} />
                                 )}
-                                {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}
+                                <Typography component="span" fontWeight={isWinner('pair1', result.sets) ? 'bold' : 'normal'}>
+                                  {result.pair1?.player1 || 'N/A'} y {result.pair1?.player2 || 'N/A'}
+                                </Typography>
                               </TableCell>
                               {result.sets.map((set, index) => (
                                 <TableCell key={index} align="center">{set.pair1Score || 0}</TableCell>
@@ -358,7 +359,9 @@ const ResultsList = () => {
                                 {isWinner('pair2', result.sets) && (
                                   <EmojiEvents sx={{ color: '#ffc107', marginRight: '5px' }} />
                                 )}
-                                {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}
+                                <Typography component="span" fontWeight={isWinner('pair2', result.sets) ? 'bold' : 'normal'}>
+                                  {result.pair2?.player1 || 'N/A'} y {result.pair2?.player2 || 'N/A'}
+                                </Typography>
                               </TableCell>
                               {result.sets.map((set, index) => (
                                 <TableCell key={index} align="center">{set.pair2Score || 0}</TableCell>
