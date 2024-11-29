@@ -30,66 +30,126 @@ const Insignias = () => {
       return pair1Wins > pair2Wins ? 'pair1' : 'pair2';
     };
 
+    const calculateConsecutiveWins = (matches, playerName) => {
+      let consecutiveWins = 0;
+      let maxConsecutiveWins = 0;
+      let lastGameWon = null;
+
+      // Ordenar los partidos por fecha
+      const sortedMatches = matches.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      sortedMatches.forEach(match => {
+        const winner = getMatchWinner(match.sets);
+
+        // Determinar si el jugador ganó
+        const playerPair = (match.pair1.player1 === playerName || match.pair1.player2 === playerName) ? 'pair1' : 'pair2';
+        const playerWon = playerPair === winner;
+
+        if (playerWon) {
+          if (lastGameWon === true || lastGameWon === null) {
+            consecutiveWins += 1;
+          } else {
+            consecutiveWins = 1;
+          }
+        } else {
+          consecutiveWins = 0;
+        }
+
+        maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins);
+        lastGameWon = playerWon;
+      });
+
+      return { consecutiveWins, maxConsecutiveWins };
+    };
+
     const fetchResults = async () => {
       const querySnapshot = await getDocs(collection(db, "results"));
       const stats = {};
+      const matches = [];
 
+      // Recopilar todas las partidas en un array
       querySnapshot.forEach(doc => {
         const data = doc.data();
-        const winner = getMatchWinner(data.sets);
+        matches.push(data);
+      });
+
+      // Ordenar las partidas por fecha, del más antiguo al más reciente
+      matches.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // Inicializar estadísticas para cada jugador
+      players.forEach(playerName => {
+        stats[playerName] = {
+          gamesPlayed: 0,
+          gamesWon: 0,
+          partners: new Set(),
+          efficiency: 0,
+          winStreak: 0,
+          longestStreak: 0
+        };
+      });
+
+      // Procesar cada partida
+      matches.forEach(match => {
+        const winner = getMatchWinner(match.sets);
+
         const playersInGame = [
-          data.pair1.player1,
-          data.pair1.player2,
-          data.pair2.player1,
-          data.pair2.player2
+          match.pair1.player1,
+          match.pair1.player2,
+          match.pair2.player1,
+          match.pair2.player2
         ];
 
+        // Actualizar estadísticas generales
         playersInGame.forEach(playerName => {
-          if (!stats[playerName]) {
-            stats[playerName] = {
-              gamesPlayed: 0,
-              gamesWon: 0,
-              partners: new Set(),
-              efficiency: 0,
-              winStreak: 0,
-              longestStreak: 0,
-              lastGameWon: false
-            };
-          }
           stats[playerName].gamesPlayed += 1;
 
           // Actualizar compañeros
-          if (data.pair1.player1 === playerName) {
-            stats[playerName].partners.add(data.pair1.player2);
-          } else if (data.pair1.player2 === playerName) {
-            stats[playerName].partners.add(data.pair1.player1);
-          } else if (data.pair2.player1 === playerName) {
-            stats[playerName].partners.add(data.pair2.player2);
-          } else if (data.pair2.player2 === playerName) {
-            stats[playerName].partners.add(data.pair2.player1);
+          if (match.pair1.player1 === playerName) {
+            stats[playerName].partners.add(match.pair1.player2);
+          } else if (match.pair1.player2 === playerName) {
+            stats[playerName].partners.add(match.pair1.player1);
+          } else if (match.pair2.player1 === playerName) {
+            stats[playerName].partners.add(match.pair2.player2);
+          } else if (match.pair2.player2 === playerName) {
+            stats[playerName].partners.add(match.pair2.player1);
           }
+        });
 
-          // Actualizar victorias y rachas
-          const playerPair = (data.pair1.player1 === playerName || data.pair1.player2 === playerName) ? 'pair1' : 'pair2';
-          if (playerPair === winner) {
+        // Actualizar victorias
+        [match.pair1.player1, match.pair1.player2].forEach(playerName => {
+          if (winner === 'pair1') {
             stats[playerName].gamesWon += 1;
-            if (stats[playerName].lastGameWon) {
-              stats[playerName].winStreak += 1;
-            } else {
-              stats[playerName].winStreak = 1;
-            }
-            stats[playerName].longestStreak = Math.max(stats[playerName].longestStreak, stats[playerName].winStreak);
-            stats[playerName].lastGameWon = true;
-          } else {
-            stats[playerName].winStreak = 0;
-            stats[playerName].lastGameWon = false;
+          }
+        });
+
+        [match.pair2.player1, match.pair2.player2].forEach(playerName => {
+          if (winner === 'pair2') {
+            stats[playerName].gamesWon += 1;
           }
         });
       });
 
-      Object.keys(stats).forEach(playerName => {
+      // Calcular rachas de victorias para cada jugador
+      players.forEach(playerName => {
+        const playerMatches = matches.filter(match => {
+          const playersInGame = [
+            match.pair1.player1,
+            match.pair1.player2,
+            match.pair2.player1,
+            match.pair2.player2
+          ];
+          return playersInGame.includes(playerName);
+        });
+
+        const { consecutiveWins, maxConsecutiveWins } = calculateConsecutiveWins(playerMatches, playerName);
+        stats[playerName].winStreak = consecutiveWins;
+        stats[playerName].longestStreak = maxConsecutiveWins;
+
+        // Finalizar estadísticas para cada jugador
         stats[playerName].partners = [...stats[playerName].partners];
-        stats[playerName].efficiency = stats[playerName].gamesPlayed > 0 ? (stats[playerName].gamesWon / stats[playerName].gamesPlayed) * 100 : 0;
+        stats[playerName].efficiency = stats[playerName].gamesPlayed > 0
+          ? (stats[playerName].gamesWon / stats[playerName].gamesPlayed) * 100
+          : 0;
       });
 
       setPlayerStats(stats);
@@ -204,19 +264,38 @@ const Insignias = () => {
                 if (notEligible) {
                   progressText = 'Necesitas jugar al menos 5 partidos para desbloquear niveles en esta insignia.';
                 } else {
-                  progressText = unlocked < totalLevels
-                    ? `${currentLevelName ? `Nivel ${currentLevelName} conseguido. ` : ''}Progreso hacia ${nextLevelName}: ${Math.min(Math.round(value), nextThreshold)}/${nextThreshold}`
-                    : `Has alcanzado el nivel máximo (${levelNames[unlocked - 1]}) en esta insignia. ¡Felicidades!`;
+                  // Para la insignia de Racha Ganadora
+                  if (achievement === 'longestStreak') {
+                    progressText = `Racha actual: ${playerStats[playerName]?.winStreak || 0}\nMayor racha conseguida: ${playerStats[playerName]?.longestStreak || 0}`;
+
+                    if (unlocked === 0) {
+                      progressText += `\nProgreso hacia Bronce: ${Math.min(Math.round(value), achievements[achievement][0])}/${achievements[achievement][0]}`;
+                    } else if (unlocked < totalLevels) {
+                      progressText = `Nivel ${currentLevelName} conseguido.\n` + progressText;
+                      progressText += `\nProgreso hacia ${nextLevelName}: ${Math.min(Math.round(value), nextThreshold)}/${nextThreshold}`;
+                    } else {
+                      progressText = `Has alcanzado el nivel máximo (${levelNames[unlocked - 1]}) en esta insignia. ¡Felicidades!\n` + progressText;
+                    }
+                  } else {
+                    // Para otras insignias
+                    if (unlocked === 0) {
+                      progressText = `Progreso hacia Bronce: ${Math.min(Math.round(value), achievements[achievement][0])}/${achievements[achievement][0]}`;
+                    } else if (unlocked < totalLevels) {
+                      progressText = `Nivel ${currentLevelName} conseguido.\nProgreso hacia ${nextLevelName}: ${Math.min(Math.round(value), nextThreshold)}/${nextThreshold}`;
+                    } else {
+                      progressText = `Has alcanzado el nivel máximo (${levelNames[unlocked - 1]}) en esta insignia. ¡Felicidades!`;
+                    }
+                  }
                 }
 
                 return (
-                  <Grid item xs={3} key={achievement}>
+                  <Grid item xs={6} sm={4} md={2} key={achievement}>
                     <Tooltip
                       title={
                         <div>
                           <Typography variant="body2"><strong>{achievementDetails[achievement].name}</strong></Typography>
                           <Typography variant="body2">{achievementDetails[achievement].description}</Typography>
-                          <Typography variant="body2">{progressText}</Typography>
+                          <Typography variant="body2" style={{ whiteSpace: 'pre-line' }}>{progressText}</Typography>
                         </div>
                       }
                       placement="top"
