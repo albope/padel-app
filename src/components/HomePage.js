@@ -9,14 +9,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import ResultsList from './ResultsList';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs'; // Para formatear fechas
 
 const HomePage = () => {
   const [totalGamesByYear, setTotalGamesByYear] = useState({});
   const [locations, setLocations] = useState([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -24,7 +22,7 @@ const HomePage = () => {
   useEffect(() => {
     const fetchResults = async () => {
       const querySnapshot = await getDocs(collection(db, "results"));
-      
+
       const gamesByYear = {};
       const uniqueLocations = new Set();
       const fetchedResults = [];
@@ -115,6 +113,8 @@ const HomePage = () => {
           Padel Mas Camarena
         </Typography>
       </Box>
+
+      {/* Eliminamos los botones de "Añadir Resultado" y "Ver Estadísticas Avanzadas" */}
 
       <ResultsList />
 

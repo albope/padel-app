@@ -1,3 +1,5 @@
+// ResultsList.js
+
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, deleteDoc, doc, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -404,7 +406,7 @@ const ResultsList = () => {
       </Box>
 
       <Box
-        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px' }}
+        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', cursor: 'pointer' }}
         onClick={() => navigate('/info')}
       >
         <Typography variant="h5">
@@ -413,7 +415,7 @@ const ResultsList = () => {
         </Typography>
       </Box>
       <Box
-        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px' }}
+        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', cursor: 'pointer' }}
         onClick={() => navigate('/players')}
       >
         <Typography variant="h5">
@@ -422,11 +424,21 @@ const ResultsList = () => {
         </Typography>
       </Box>
       <Box
-        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', marginBottom: '20px', borderRadius: '10px' }}
+        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', borderRadius: '10px', cursor: 'pointer' }}
         onClick={() => navigate('/insignias')}
       >
         <Typography variant="h5">
           Insignias
+          <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
+        </Typography>
+      </Box>
+      {/* Botón de "Estadísticas Avanzadas" debajo de "Insignias" */}
+      <Box
+        sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px', marginBottom: '20px', borderRadius: '10px', cursor: 'pointer' }}
+        onClick={() => navigate('/stats-charts')}
+      >
+        <Typography variant="h5">
+          Estadísticas Avanzadas
           <ArrowForwardIcon sx={{ marginLeft: '8px' }} />
         </Typography>
       </Box>
