@@ -33,12 +33,15 @@ import {
   CardContent,
   Popover,
   Divider,
+  Tooltip,
+  Pagination,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Bar, Pie, Line } from 'react-chartjs-2';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import dayjs from 'dayjs';
+import 'dayjs/locale/es'; // Idioma español para Dayjs
 import 'chart.js/auto';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -48,6 +51,69 @@ import { saveAs } from 'file-saver';
 import html2canvas from 'html2canvas';
 import { TransitionGroup } from 'react-transition-group';
 
+dayjs.locale('es'); // Aplicar idioma español a Dayjs
+
+// Función para exportar gráficos como imagen
+const exportChartAsImage = async (chartRef, chartName) => {
+  if (!chartRef.current) return;
+  const canvas = await html2canvas(chartRef.current);
+  canvas.toBlob((blob) => {
+    saveAs(blob, `${chartName}.png`);
+  });
+};
+
+// Opciones de los gráficos
+const barChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Eficiencia (%)' } },
+    x: { title: { display: true, text: 'Jugadores' } },
+  },
+};
+
+const stackedBarChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: { beginAtZero: true, title: { display: true, text: 'Número de Sets' }, stacked: true },
+    x: { title: { display: true, text: 'Jugadores' }, stacked: true },
+  },
+};
+
+const pairEfficiencyChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Eficiencia (%)' } },
+    x: { title: { display: true, text: 'Parejas' } },
+  },
+};
+
+const lineChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Eficiencia (%)' } },
+    x: { title: { display: true, text: 'Fechas' } },
+  },
+};
+
+const pieChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: true, position: 'bottom' } },
+};
+
+const monthlyChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  scales: {
+    y: { beginAtZero: true, title: { display: true, text: 'Partidos Jugados' } },
+    x: { title: { display: true, text: 'Meses' } },
+  },
+};
+
 const StatsCharts = () => {
   const [players, setPlayers] = useState([
     { id: 'Lucas', name: 'Lucas' },
@@ -56,42 +122,37 @@ const StatsCharts = () => {
     { id: 'Ricardo', name: 'Ricardo' },
   ]);
   const [selectedPlayers, setSelectedPlayers] = useState(['Lucas', 'Bort', 'Martin', 'Ricardo']);
-  const [startDate, setStartDate] = useState(dayjs().startOf('month')); // Primer día del mes actual
-  const [endDate, setEndDate] = useState(dayjs().endOf('month')); // Último día del mes actual
+
+  // Estado para rango de fechas principal (mes-año)
+  const [startDate, setStartDate] = useState(dayjs().startOf('month'));
+  const [endDate, setEndDate] = useState(dayjs().endOf('month'));
+
+  // Estados para gráficos
   const [barChartData, setBarChartData] = useState(null);
   const [pieChartData, setPieChartData] = useState(null);
   const [lineChartData, setLineChartData] = useState(null);
   const [monthlyChartData, setMonthlyChartData] = useState(null);
+  const [stackedBarChartData, setStackedBarChartData] = useState(null);
+  const [pairEfficiencyChartData, setPairEfficiencyChartData] = useState(null);
+
   const [summaryData, setSummaryData] = useState({
     totalSets: 0,
     topPlayer: '',
     topPlayerWins: 0,
   });
-  const [stackedBarChartData, setStackedBarChartData] = useState(null);
-  const [pairEfficiencyChartData, setPairEfficiencyChartData] = useState(null);
-  const [trendInterval, setTrendInterval] = useState('Día'); // 'Día', 'Semana', 'Mes'
-  const [recentMatches, setRecentMatches] = useState([]);
-  const [tabIndex, setTabIndex] = useState(0);
+
+  const [trendInterval, setTrendInterval] = useState('Día');
   const [matchHistory, setMatchHistory] = useState([]);
-  const [searchText, setSearchText] = useState('');
+  const [tabIndex, setTabIndex] = useState(0);
+
   const [insightsSelectedPeriod, setInsightsSelectedPeriod] = useState([]);
   const [insightsCurrentMonth, setInsightsCurrentMonth] = useState([]);
-  const navigate = useNavigate();
 
+  const navigate = useNavigate();
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
-  // Refs para exportar gráficos
-  const chartRefs = {
-    barChart: useRef(null),
-    stackedBarChart: useRef(null),
-    lineChart: useRef(null),
-    pairEfficiencyChart: useRef(null),
-    pieChart: useRef(null),
-    monthlyChart: useRef(null),
-  };
-
-  // Estado para el Popover de Tooltips
+  // Popover para Tooltips
   const [anchorEl, setAnchorEl] = useState(null);
   const [popoverContent, setPopoverContent] = useState('');
 
@@ -107,28 +168,109 @@ const StatsCharts = () => {
 
   const openPopover = Boolean(anchorEl);
 
-  // Obtener datos cuando cambian los filtros
+  // Refs para exportar gráficos
+  const chartRefs = {
+    barChart: useRef(null),
+    stackedBarChart: useRef(null),
+    lineChart: useRef(null),
+    pairEfficiencyChart: useRef(null),
+    pieChart: useRef(null),
+    monthlyChart: useRef(null),
+  };
+
+  // Filtros en Historial (sin fecha en Historial, sin búsqueda general)
+  const [searchPlayerFilter, setSearchPlayerFilter] = useState('');
+  const [searchPairFilter, setSearchPairFilter] = useState('');
+
+  // Resultados del mes anterior para cálculos de mejora de eficiencia
+  const [lastMonthResults, setLastMonthResults] = useState([]);
+
+  // Paginación en Historial
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Ajuste partido más ajustado:
+  // PuntajeDeAjuste = DiferenciaTotal / NumeroDeSets
+  // Elegir el partido con el menor PuntajeDeAjuste.
+  // Si hay empate en PuntajeDeAjuste, preferir el partido con 3 sets sobre 2 sets.
+  // Si continúa el empate, mostrar todos.
+
+  // Añadir Tooltips para "Diferencia promedio de sets" y "Partido más ajustado"
+  // Creamos funciones para renderizar insights con icono si contienen esas frases
+  const renderInsight = (insight) => {
+    let showDiffTooltip = false;
+    let showAjustadoTooltip = false;
+
+    if (insight.includes('Diferencia promedio de sets')) {
+      showDiffTooltip = true;
+    }
+    if (insight.includes('Partido más ajustado')) {
+      showAjustadoTooltip = true;
+    }
+
+    return (
+      <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+        {insight}
+        {showDiffTooltip && (
+          <IconButton
+            size="small"
+            onClick={(e) =>
+              handlePopoverOpen(
+                e,
+                'Representa la diferencia promedio entre sets ganados y perdidos por un jugador en el período seleccionado.'
+              )
+            }
+          >
+            <InfoIcon fontSize="small" />
+          </IconButton>
+        )}
+        {showAjustadoTooltip && (
+          <IconButton
+            size="small"
+            onClick={(e) =>
+              handlePopoverOpen(
+                e,
+                'Es el partido con la menor diferencia total de puntos entre los sets, considerando la división por el número de sets jugados (más sets = más ajustado si misma diferencia).'
+              )
+            }
+          >
+            <InfoIcon fontSize="small" />
+          </IconButton>
+        )}
+      </Typography>
+    );
+  };
+
+  useEffect(() => {
+    // Cargar datos del mes anterior
+    const fetchLastMonth = async () => {
+      const lastMonthStart = dayjs().subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+      const lastMonthEnd = dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
+      const resultsCollection = collection(db, 'results');
+      const lastMonthQuery = query(
+        resultsCollection,
+        where('date', '>=', lastMonthStart),
+        where('date', '<=', lastMonthEnd)
+      );
+      const lastMonthSnapshot = await getDocs(lastMonthQuery);
+      const lResults = lastMonthSnapshot.docs.map((doc) => doc.data());
+      setLastMonthResults(lResults);
+    };
+    fetchLastMonth();
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
-      if (selectedPlayers.length === 0 || players.length === 0) {
-        return;
-      }
+      if (selectedPlayers.length === 0 || players.length === 0) return;
 
-      // Preparar rango de fechas
       const start = startDate.format('YYYY-MM-DD');
       const end = endDate.format('YYYY-MM-DD');
 
-      // Obtener resultados dentro del rango de fechas
       const resultsCollection = collection(db, 'results');
-      const resultsQuery = query(
-        resultsCollection,
-        where('date', '>=', start),
-        where('date', '<=', end)
-      );
+      const resultsQuery = query(resultsCollection, where('date', '>=', start), where('date', '<=', end));
       const resultsSnapshot = await getDocs(resultsQuery);
       const resultsData = resultsSnapshot.docs.map((doc) => doc.data());
 
-      // Obtener resultados del mes actual
       const currentMonthStart = dayjs().startOf('month').format('YYYY-MM-DD');
       const currentMonthEnd = dayjs().endOf('month').format('YYYY-MM-DD');
       const currentMonthQuery = query(
@@ -139,34 +281,29 @@ const StatsCharts = () => {
       const currentMonthSnapshot = await getDocs(currentMonthQuery);
       const currentMonthResults = currentMonthSnapshot.docs.map((doc) => doc.data());
 
-      // Filtrar resultados que involucran a los jugadores seleccionados
+      // Filtrar por jugadores seleccionados
       const filteredResults = resultsData.filter((result) =>
-        [result.pair1.player1, result.pair1.player2, result.pair2.player1, result.pair2.player2].some(
-          (player) => selectedPlayers.includes(player)
+        [result.pair1.player1, result.pair1.player2, result.pair2.player1, result.pair2.player2].some((p) =>
+          selectedPlayers.includes(p)
         )
       );
-
-      // Guardar el historial de partidos para la tabla
       setMatchHistory(filteredResults);
 
-      // Aquí comienza el procesamiento de datos para generar los gráficos y estadísticas
-
-      // Preparar datos para el Gráfico de Barras (Eficiencia del Jugador)
+      // Calcular eficiencia y sets
       const efficiencyData = {};
-      selectedPlayers.forEach((playerId) => {
-        efficiencyData[playerId] = {
-          name: playerId,
-          gamesWon: 0,
-          gamesPlayed: 0,
-          setsWon: 0,
-          setsLost: 0,
-          efficiencies: [],
-        };
+      selectedPlayers.forEach((p) => {
+        efficiencyData[p] = { name: p, gamesWon: 0, gamesPlayed: 0, setsWon: 0, setsLost: 0, efficiencies: [] };
       });
 
-      // Variables adicionales para nuevos insights
-      let consecutiveWinsData = {}; // Para victorias consecutivas
-      let winStreakData = {}; // Para rachas ganadoras de parejas
+      let consecutiveWinsData = {};
+      let winStreakData = {};
+
+      // Contar partidos por pareja (para "Pareja más activa")
+      const pairMatchesCount = {};
+
+      // Determinar partido(s) más ajustado(s) usando PuntajeDeAjuste = DiferenciaTotal/NúmeroDeSets
+      let bestScore = Infinity;
+      let bestMatches = [];
 
       filteredResults.forEach((result) => {
         const playersInGame = [
@@ -176,107 +313,124 @@ const StatsCharts = () => {
           result.pair2.player2,
         ];
 
-        // Contabilizar partidos jugados
-        playersInGame.forEach((playerName) => {
-          if (selectedPlayers.includes(playerName)) {
-            efficiencyData[playerName].gamesPlayed += 1;
+        // Parejas:
+        const pair1Key = [result.pair1.player1, result.pair1.player2].sort().join(' & ');
+        const pair2Key = [result.pair2.player1, result.pair2.player2].sort().join(' & ');
+        pairMatchesCount[pair1Key] = (pairMatchesCount[pair1Key] || 0) + 1;
+        pairMatchesCount[pair2Key] = (pairMatchesCount[pair2Key] || 0) + 1;
+
+        playersInGame.forEach((pl) => {
+          if (selectedPlayers.includes(pl)) {
+            efficiencyData[pl].gamesPlayed += 1;
           }
         });
 
-        // Determinar el ganador
         let pair1Wins = 0;
         let pair2Wins = 0;
+        let matchDifference = 0; // Diferencia total de puntos en sets
+        const setsCount = result.sets.length;
 
         result.sets.forEach((set) => {
-          if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-            pair1Wins += 1;
-          } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-            pair2Wins += 1;
-          }
+          const s1 = parseInt(set.pair1Score, 10);
+          const s2 = parseInt(set.pair2Score, 10);
+          if (s1 > s2) pair1Wins++;
+          else if (s2 > s1) pair2Wins++;
 
-          // Contabilizar sets ganados y perdidos
-          [result.pair1.player1, result.pair1.player2].forEach((playerName) => {
-            if (selectedPlayers.includes(playerName)) {
-              if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-                efficiencyData[playerName].setsWon += 1;
-              } else {
-                efficiencyData[playerName].setsLost += 1;
-              }
+          // Sets ganados/perdidos
+          [result.pair1.player1, result.pair1.player2].forEach((pl) => {
+            if (selectedPlayers.includes(pl)) {
+              if (s1 > s2) efficiencyData[pl].setsWon++;
+              else efficiencyData[pl].setsLost++;
             }
           });
-          [result.pair2.player1, result.pair2.player2].forEach((playerName) => {
-            if (selectedPlayers.includes(playerName)) {
-              if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-                efficiencyData[playerName].setsWon += 1;
-              } else {
-                efficiencyData[playerName].setsLost += 1;
-              }
+          [result.pair2.player1, result.pair2.player2].forEach((pl) => {
+            if (selectedPlayers.includes(pl)) {
+              if (s2 > s1) efficiencyData[pl].setsWon++;
+              else efficiencyData[pl].setsLost++;
             }
           });
+
+          matchDifference += Math.abs(s1 - s2);
         });
 
         let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-        let losingPair = pair1Wins > pair2Wins ? 'pair2' : 'pair1';
+        let losingPair = (winningPair === 'pair1') ? 'pair2' : 'pair1';
 
-        [result[winningPair].player1, result[winningPair].player2].forEach((playerName) => {
-          if (selectedPlayers.includes(playerName)) {
-            efficiencyData[playerName].gamesWon += 1;
-
-            // Actualizar racha de victorias
-            if (!consecutiveWinsData[playerName]) {
-              consecutiveWinsData[playerName] = { currentStreak: 1, maxStreak: 1 };
-            } else {
-              consecutiveWinsData[playerName].currentStreak += 1;
-              if (consecutiveWinsData[playerName].currentStreak > consecutiveWinsData[playerName].maxStreak) {
-                consecutiveWinsData[playerName].maxStreak = consecutiveWinsData[playerName].currentStreak;
-              }
+        [result[winningPair].player1, result[winningPair].player2].forEach((pl) => {
+          if (selectedPlayers.includes(pl)) {
+            efficiencyData[pl].gamesWon += 1;
+            if (!consecutiveWinsData[pl]) consecutiveWinsData[pl] = { currentStreak: 1, maxStreak: 1 };
+            else {
+              consecutiveWinsData[pl].currentStreak += 1;
+              if (consecutiveWinsData[pl].currentStreak > consecutiveWinsData[pl].maxStreak)
+                consecutiveWinsData[pl].maxStreak = consecutiveWinsData[pl].currentStreak;
             }
           }
         });
 
-        [result[losingPair].player1, result[losingPair].player2].forEach((playerName) => {
-          if (selectedPlayers.includes(playerName)) {
-            if (!consecutiveWinsData[playerName]) {
-              consecutiveWinsData[playerName] = { currentStreak: 0, maxStreak: 0 };
-            } else {
-              consecutiveWinsData[playerName].currentStreak = 0;
-            }
+        [result[losingPair].player1, result[losingPair].player2].forEach((pl) => {
+          if (selectedPlayers.includes(pl)) {
+            if (!consecutiveWinsData[pl]) consecutiveWinsData[pl] = { currentStreak: 0, maxStreak: 0 };
+            else consecutiveWinsData[pl].currentStreak = 0;
           }
         });
 
-        // Actualizar datos para rachas ganadoras de parejas
+        // Racha de parejas
         const winningPairKey = [result[winningPair].player1, result[winningPair].player2].sort().join(' & ');
-        if (!winStreakData[winningPairKey]) {
-          winStreakData[winningPairKey] = { currentStreak: 1, maxStreak: 1 };
-        } else {
+        if (!winStreakData[winningPairKey]) winStreakData[winningPairKey] = { currentStreak: 1, maxStreak: 1 };
+        else {
           winStreakData[winningPairKey].currentStreak += 1;
-          if (winStreakData[winningPairKey].currentStreak > winStreakData[winningPairKey].maxStreak) {
+          if (winStreakData[winningPairKey].currentStreak > winStreakData[winningPairKey].maxStreak)
             winStreakData[winningPairKey].maxStreak = winStreakData[winningPairKey].currentStreak;
-          }
         }
 
         const losingPairKey = [result[losingPair].player1, result[losingPair].player2].sort().join(' & ');
-        if (!winStreakData[losingPairKey]) {
-          winStreakData[losingPairKey] = { currentStreak: 0, maxStreak: 0 };
+        if (!winStreakData[losingPairKey]) winStreakData[losingPairKey] = { currentStreak: 0, maxStreak: 0 };
+        else winStreakData[losingPairKey].currentStreak = 0;
+
+        // Calcular PuntajeDeAjuste
+        const score = matchDifference / setsCount;
+
+        // Seleccionar partido más ajustado:
+        // - Menor PuntajeDeAjuste es mejor
+        // - Si hay empate en PuntajeDeAjuste, preferir el de más sets (3 sets sobre 2)
+        // Vamos a almacenar: {score, setsCount, match, difference: matchDifference}
+        // Al final elegimos el o los con mejor ranking
+
+        // Primero ver si encontramos mejor score
+        if (score < bestScore) {
+          bestScore = score;
+          bestMatches = [{ match: result, setsCount, difference: matchDifference, score }];
+        } else if (Math.abs(score - bestScore) < 0.0001) {
+          // Empate en PuntajeDeAjuste
+          // Ver si alguno tiene 3 sets
+          const bestCurrentSetsCount = bestMatches[0].setsCount;
+          if (setsCount > bestCurrentSetsCount) {
+            // Preferir este con más sets
+            bestMatches = [{ match: result, setsCount, difference: matchDifference, score }];
+          } else if (setsCount === bestCurrentSetsCount) {
+            // mismo sets count, agregamos
+            bestMatches.push({ match: result, setsCount, difference: matchDifference, score });
+          } else {
+            // setsCount < bestCurrentSetsCount, entonces mantenemos los ya encontrados
+            // no hacemos nada
+          }
         } else {
-          winStreakData[losingPairKey].currentStreak = 0;
+          // score > bestScore, no es mejor, ignorar
         }
       });
 
-      // Preparar datos para el Gráfico de Barras (Eficiencia del Jugador)
+      // Preparar datos para gráficos
+
+      // Eficiencia (bar chart)
       const barChartLabels = [];
       const barChartValues = [];
       const playerColors = {};
-
-      Object.values(efficiencyData).forEach((playerData) => {
-        barChartLabels.push(playerData.name);
-        const efficiency =
-          playerData.gamesPlayed > 0 ? (playerData.gamesWon / playerData.gamesPlayed) * 100 : 0;
-        barChartValues.push(efficiency.toFixed(2));
-        efficiencyData[playerData.name].efficiencies.push(efficiency);
-
-        // Asignar color para jugadores seleccionados
-        playerColors[playerData.name] = selectedPlayers.includes(playerData.name)
+      Object.values(efficiencyData).forEach((p) => {
+        const eff = p.gamesPlayed > 0 ? (p.gamesWon / p.gamesPlayed) * 100 : 0;
+        barChartLabels.push(p.name);
+        barChartValues.push(eff.toFixed(2));
+        playerColors[p.name] = selectedPlayers.includes(p.name)
           ? 'rgba(75,192,192,0.6)'
           : 'rgba(192,192,192,0.6)';
       });
@@ -292,115 +446,79 @@ const StatsCharts = () => {
         ],
       });
 
-      // Preparar datos para el Gráfico de Barras Apiladas (Sets Ganados y Perdidos por Jugador)
+      // Sets ganados/perdidos (stacked bar)
       const stackedBarLabels = [];
       const setsWonData = [];
       const setsLostData = [];
-
-      Object.values(efficiencyData).forEach((playerData) => {
-        stackedBarLabels.push(playerData.name);
-        setsWonData.push(playerData.setsWon);
-        setsLostData.push(playerData.setsLost);
+      Object.values(efficiencyData).forEach((pl) => {
+        stackedBarLabels.push(pl.name);
+        setsWonData.push(pl.setsWon);
+        setsLostData.push(pl.setsLost);
       });
 
       setStackedBarChartData({
         labels: stackedBarLabels,
         datasets: [
-          {
-            label: 'Sets Ganados',
-            data: setsWonData,
-            backgroundColor: 'rgba(54, 162, 235, 0.6)',
-          },
-          {
-            label: 'Sets Perdidos',
-            data: setsLostData,
-            backgroundColor: 'rgba(255, 99, 132, 0.6)',
-          },
+          { label: 'Sets Ganados', data: setsWonData, backgroundColor: 'rgba(54,162,235,0.6)' },
+          { label: 'Sets Perdidos', data: setsLostData, backgroundColor: 'rgba(255,99,132,0.6)' },
         ],
       });
 
-      // Preparar datos para el Gráfico de Rendimiento en Parejas
-      const pairEfficiencyData = {};
-      filteredResults.forEach((result) => {
-        const pair1Key = [result.pair1.player1, result.pair1.player2].sort().join(' & ');
-        const pair2Key = [result.pair2.player1, result.pair2.player2].sort().join(' & ');
+      // Rendimiento en parejas
+      const pairEfficiencyDataMap = {};
+      filteredResults.forEach((res) => {
+        const p1 = [res.pair1.player1, res.pair1.player2].sort().join(' & ');
+        const p2 = [res.pair2.player1, res.pair2.player2].sort().join(' & ');
+        if (!pairEfficiencyDataMap[p1]) pairEfficiencyDataMap[p1] = { gamesWon: 0, gamesPlayed: 0 };
+        if (!pairEfficiencyDataMap[p2]) pairEfficiencyDataMap[p2] = { gamesWon: 0, gamesPlayed: 0 };
+        pairEfficiencyDataMap[p1].gamesPlayed++;
+        pairEfficiencyDataMap[p2].gamesPlayed++;
 
-        if (!pairEfficiencyData[pair1Key]) {
-          pairEfficiencyData[pair1Key] = { gamesWon: 0, gamesPlayed: 0 };
-        }
-        if (!pairEfficiencyData[pair2Key]) {
-          pairEfficiencyData[pair2Key] = { gamesWon: 0, gamesPlayed: 0 };
-        }
-
-        pairEfficiencyData[pair1Key].gamesPlayed += 1;
-        pairEfficiencyData[pair2Key].gamesPlayed += 1;
-
-        let pair1Wins = 0;
-        let pair2Wins = 0;
-
-        result.sets.forEach((set) => {
-          if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-            pair1Wins += 1;
-          } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-            pair2Wins += 1;
-          }
+        let p1w = 0, p2w = 0;
+        res.sets.forEach((s) => {
+          const s1 = parseInt(s.pair1Score, 10);
+          const s2 = parseInt(s.pair2Score, 10);
+          if (s1 > s2) p1w++;
+          else if (s2 > s1) p2w++;
         });
-
-        if (pair1Wins > pair2Wins) {
-          pairEfficiencyData[pair1Key].gamesWon += 1;
-        } else {
-          pairEfficiencyData[pair2Key].gamesWon += 1;
-        }
+        if (p1w > p2w) pairEfficiencyDataMap[p1].gamesWon++;
+        else pairEfficiencyDataMap[p2].gamesWon++;
       });
 
       const pairLabels = [];
       const pairEfficiencyValues = [];
-
-      Object.keys(pairEfficiencyData).forEach((pairKey) => {
+      Object.keys(pairEfficiencyDataMap).forEach((pairKey) => {
         const pairPlayers = pairKey.split(' & ');
-        // Filtrar solo parejas con jugadores seleccionados
-        if (pairPlayers.every((player) => selectedPlayers.includes(player))) {
-          const data = pairEfficiencyData[pairKey];
-          const efficiency = (data.gamesWon / data.gamesPlayed) * 100;
+        if (pairPlayers.every((pl) => selectedPlayers.includes(pl))) {
+          const d = pairEfficiencyDataMap[pairKey];
+          const eff = (d.gamesWon / d.gamesPlayed) * 100;
           pairLabels.push(pairKey);
-          pairEfficiencyValues.push(efficiency.toFixed(2));
+          pairEfficiencyValues.push(eff.toFixed(2));
         }
       });
 
       setPairEfficiencyChartData({
         labels: pairLabels,
         datasets: [
-          {
-            label: 'Eficiencia (%)',
-            data: pairEfficiencyValues,
-            backgroundColor: 'rgba(255, 159, 64, 0.6)',
-          },
+          { label: 'Eficiencia (%)', data: pairEfficiencyValues, backgroundColor: 'rgba(255,159,64,0.6)' },
         ],
       });
 
-      // Preparar datos para el Gráfico de Pastel (Victorias por Parejas)
+      // Pastel victorias parejas
       const pairingWins = {};
-
-      filteredResults.forEach((result) => {
-        let pair1Wins = 0;
-        let pair2Wins = 0;
-
-        result.sets.forEach((set) => {
-          if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-            pair1Wins += 1;
-          } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-            pair2Wins += 1;
-          }
+      filteredResults.forEach((res) => {
+        let p1w = 0, p2w = 0;
+        res.sets.forEach((s) => {
+          const s1 = parseInt(s.pair1Score, 10);
+          const s2 = parseInt(s.pair2Score, 10);
+          if (s1 > s2) p1w++;
+          else if (s2 > s1) p2w++;
         });
-
-        let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-
-        const winnerPairPlayers = [result[winningPair].player1, result[winningPair].player2];
-
-        // Solo incluir si ambos jugadores están en selectedPlayers
-        if (winnerPairPlayers.every((player) => selectedPlayers.includes(player))) {
-          const pairKey = winnerPairPlayers.sort().join(' & ');
-          pairingWins[pairKey] = (pairingWins[pairKey] || 0) + 1;
+        const wPair = p1w > p2w ? 'pair1' : 'pair2';
+        const wp = [res[wPair].player1, res[wPair].player2];
+        if (wp.every((pl) => selectedPlayers.includes(pl))) {
+          const key = wp.sort().join(' & ');
+          pairingWins[key] = (pairingWins[key] || 0) + 1;
         }
       });
 
@@ -412,317 +530,330 @@ const StatsCharts = () => {
         datasets: [
           {
             data: pieChartValues,
-            backgroundColor: pieChartLabels.map(
-              () => `#${Math.floor(Math.random() * 16777215).toString(16)}`
-            ),
+            backgroundColor: pieChartLabels.map(() => `#${Math.floor(Math.random() * 16777215).toString(16)}`),
           },
         ],
       });
 
-      // Preparar datos para el Gráfico de Líneas (Tendencia de Eficiencia)
-      const sortedResults = filteredResults.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
-
-      const allDatesSet = new Set();
-      sortedResults.forEach((result) => {
-        if (trendInterval === 'Día') {
-          allDatesSet.add(dayjs(result.date).format('YYYY-MM-DD'));
-        } else if (trendInterval === 'Semana') {
-          allDatesSet.add(dayjs(result.date).startOf('week').format('YYYY-MM-DD'));
-        } else if (trendInterval === 'Mes') {
-          allDatesSet.add(dayjs(result.date).startOf('month').format('YYYY-MM-DD'));
-        }
-      });
-      let allDates = Array.from(allDatesSet).sort();
-
-      const dateToResultsMap = {};
-      sortedResults.forEach((result) => {
-        let dateKey;
-        if (trendInterval === 'Día') {
-          dateKey = dayjs(result.date).format('YYYY-MM-DD');
-        } else if (trendInterval === 'Semana') {
-          dateKey = dayjs(result.date).startOf('week').format('YYYY-MM-DD');
-        } else if (trendInterval === 'Mes') {
-          dateKey = dayjs(result.date).startOf('month').format('YYYY-MM-DD');
-        }
-
-        if (!dateToResultsMap[dateKey]) {
-          dateToResultsMap[dateKey] = [];
-        }
-        dateToResultsMap[dateKey].push(result);
+      // Tendencia de eficiencia (line chart)
+      const sortedByDate = filteredResults.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+      const allDatesSetLine = new Set();
+      sortedByDate.forEach((r) => {
+        if (trendInterval === 'Día') allDatesSetLine.add(dayjs(r.date).format('YYYY-MM-DD'));
+        else if (trendInterval === 'Semana') allDatesSetLine.add(dayjs(r.date).startOf('week').format('YYYY-MM-DD'));
+        else if (trendInterval === 'Mes') allDatesSetLine.add(dayjs(r.date).startOf('month').format('YYYY-MM-DD'));
       });
 
-      allDates = Object.keys(dateToResultsMap).sort();
+      const allDatesLine = Array.from(allDatesSetLine).sort();
+      const dateToResultsMapLine = {};
+      sortedByDate.forEach((r) => {
+        let dKey;
+        if (trendInterval === 'Día') dKey = dayjs(r.date).format('YYYY-MM-DD');
+        else if (trendInterval === 'Semana') dKey = dayjs(r.date).startOf('week').format('YYYY-MM-DD');
+        else dKey = dayjs(r.date).startOf('month').format('YYYY-MM-DD');
 
-      const lineChartDatasets = selectedPlayers.map((playerId) => ({
-        label: playerId,
+        if (!dateToResultsMapLine[dKey]) dateToResultsMapLine[dKey] = [];
+        dateToResultsMapLine[dKey].push(r);
+      });
+
+      const lineChartDatasets = selectedPlayers.map((pid) => ({
+        label: pid,
         data: [],
         borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
         fill: false,
       }));
 
       const cumulativeStats = {};
-      selectedPlayers.forEach((playerId) => {
-        cumulativeStats[playerId] = {
-          gamesWon: 0,
-          gamesPlayed: 0,
-          lastEfficiency: 0,
-        };
+      selectedPlayers.forEach((pid) => {
+        cumulativeStats[pid] = { gamesWon: 0, gamesPlayed: 0, lastEfficiency: 0 };
       });
 
-      allDates.forEach((dateStr) => {
-        const dateResults = dateToResultsMap[dateStr];
-
-        selectedPlayers.forEach((playerId, index) => {
-          let gamesWon = 0;
-          let gamesPlayed = 0;
-
-          dateResults.forEach((result) => {
-            const playersInGame = [
-              result.pair1.player1,
-              result.pair1.player2,
-              result.pair2.player1,
-              result.pair2.player2,
-            ];
-
-            if (playersInGame.includes(playerId)) {
-              gamesPlayed += 1;
-
-              // Determinar el ganador
-              let pair1Wins = 0;
-              let pair2Wins = 0;
-
-              result.sets.forEach((set) => {
-                if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-                  pair1Wins += 1;
-                } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-                  pair2Wins += 1;
-                }
+      allDatesLine.forEach((dStr) => {
+        const dResults = dateToResultsMapLine[dStr];
+        selectedPlayers.forEach((pid, idx) => {
+          let gw = 0, gp = 0;
+          dResults.forEach((rr) => {
+            const pGame = [rr.pair1.player1, rr.pair1.player2, rr.pair2.player1, rr.pair2.player2];
+            if (pGame.includes(pid)) {
+              gp++;
+              let p1w=0,p2w=0;
+              rr.sets.forEach((ss) => {
+                const s1=parseInt(ss.pair1Score,10), s2=parseInt(ss.pair2Score,10);
+                if(s1>s2)p1w++;else if(s2>s1)p2w++;
               });
-
-              let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-
-              if (
-                result[winningPair].player1 === playerId ||
-                result[winningPair].player2 === playerId
-              ) {
-                gamesWon += 1;
-              }
+              const wPair = p1w>p2w?'pair1':'pair2';
+              if(rr[wPair].player1===pid||rr[wPair].player2===pid)gw++;
             }
           });
 
-          // Actualizar estadísticas acumuladas
-          cumulativeStats[playerId].gamesPlayed += gamesPlayed;
-          cumulativeStats[playerId].gamesWon += gamesWon;
-
-          const efficiency =
-            cumulativeStats[playerId].gamesPlayed > 0
-              ? (cumulativeStats[playerId].gamesWon / cumulativeStats[playerId].gamesPlayed) * 100
-              : cumulativeStats[playerId].lastEfficiency;
-
-          cumulativeStats[playerId].lastEfficiency = efficiency;
-
-          lineChartDatasets[index].data.push(efficiency.toFixed(2));
+          cumulativeStats[pid].gamesPlayed+=gp;
+          cumulativeStats[pid].gamesWon+=gw;
+          const eff = cumulativeStats[pid].gamesPlayed>0?(cumulativeStats[pid].gamesWon/cumulativeStats[pid].gamesPlayed)*100:cumulativeStats[pid].lastEfficiency;
+          cumulativeStats[pid].lastEfficiency=eff;
+          lineChartDatasets[idx].data.push(eff.toFixed(2));
         });
       });
 
-      const formattedDates = allDates.map((dateStr) => {
-        if (trendInterval === 'Día') {
-          return dayjs(dateStr).format('DD/MM/YYYY');
-        } else if (trendInterval === 'Semana') {
-          const startOfWeek = dayjs(dateStr).startOf('week').format('DD/MM/YYYY');
-          const endOfWeek = dayjs(dateStr).endOf('week').format('DD/MM/YYYY');
-          return `${startOfWeek} - ${endOfWeek}`;
-        } else if (trendInterval === 'Mes') {
-          return dayjs(dateStr).format('MM/YYYY');
+      const formattedDates = allDatesLine.map((dStr) => {
+        if (trendInterval==='Día') return dayjs(dStr).format('DD/MM/YYYY');
+        else if(trendInterval==='Semana'){
+          const sw=dayjs(dStr).startOf('week').format('DD/MM/YYYY');
+          const ew=dayjs(dStr).endOf('week').format('DD/MM/YYYY');
+          return `${sw} - ${ew}`;
+        } else {
+          return dayjs(dStr).format('MM/YYYY');
         }
       });
 
-      setLineChartData({
-        labels: formattedDates,
-        datasets: lineChartDatasets,
-      });
+      setLineChartData({ labels: formattedDates, datasets: lineChartDatasets });
 
-      // Preparar datos para el Gráfico de Actividad Mensual
+      // Partidos por mes
       const matchesPerMonth = {};
-
-      filteredResults.forEach((result) => {
-        const monthKey = dayjs(result.date).format('MMM YYYY');
-        matchesPerMonth[monthKey] = (matchesPerMonth[monthKey] || 0) + 1;
+      filteredResults.forEach((r)=>{
+        const mk=dayjs(r.date).format('MMM YYYY');
+        matchesPerMonth[mk]=(matchesPerMonth[mk]||0)+1;
       });
-
-      // Convertir a arrays
-      const monthlyLabels = Object.keys(matchesPerMonth).sort((a, b) =>
-        dayjs(a, 'MMM YYYY').diff(dayjs(b, 'MMM YYYY'))
-      );
-
-      const monthlyValues = monthlyLabels.map((month) => matchesPerMonth[month]);
-
+      const monthlyLabels=Object.keys(matchesPerMonth).sort((a,b)=>dayjs(a,'MMM YYYY').diff(dayjs(b,'MMM YYYY')));
+      const monthlyValues=monthlyLabels.map((m)=>matchesPerMonth[m]);
       setMonthlyChartData({
-        labels: monthlyLabels,
-        datasets: [
-          {
-            label: 'Partidos Jugados',
-            data: monthlyValues,
-            backgroundColor: 'rgba(153,102,255,0.6)',
-          },
-        ],
+        labels:monthlyLabels,
+        datasets:[{label:'Partidos Jugados',data:monthlyValues,backgroundColor:'rgba(153,102,255,0.6)'}]
       });
 
-      // Calcular datos del resumen
-      let totalSets = 0;
-      filteredResults.forEach((result) => {
-        totalSets += result.sets.length;
-      });
+      // Datos resumen
+      let totalSets=0;
+      filteredResults.forEach((r)=>{totalSets+=r.sets.length;});
 
-      let topPlayer = '';
-      let topEfficiency = 0;
-      let topPlayerWins = 0;
-
-      Object.values(efficiencyData).forEach((playerData) => {
-        const efficiency =
-          playerData.gamesPlayed > 0 ? (playerData.gamesWon / playerData.gamesPlayed) * 100 : 0;
-
-        if (efficiency > topEfficiency) {
-          topEfficiency = efficiency;
-          topPlayer = playerData.name;
-          topPlayerWins = playerData.gamesWon;
+      // Hallar top efficiency
+      let topPlayer='';
+      let topEfficiency=0;
+      let topPlayerWins=0;
+      let allPlayersEfficiency={};
+      Object.values(efficiencyData).forEach((p)=>{
+        const eff=p.gamesPlayed>0?(p.gamesWon/p.gamesPlayed)*100:0;
+        allPlayersEfficiency[p.name]=eff;
+        if(eff>topEfficiency){
+          topEfficiency=eff;topPlayer=p.name;topPlayerWins=p.gamesWon;
         }
       });
 
-      setSummaryData({
-        totalSets,
-        topPlayer,
-        topPlayerWins,
+      setSummaryData({ totalSets, topPlayer, topPlayerWins });
+
+      // Insights del periodo seleccionado
+      const insightsPeriod=[];
+
+      // Jugador con más sets perdidos
+      let maxSetsLost=0; let playersMaxSetsLost=[];
+      Object.values(efficiencyData).forEach((p)=>{
+        if(p.setsLost>maxSetsLost){
+          maxSetsLost=p.setsLost;playersMaxSetsLost=[p.name];
+        } else if(p.setsLost===maxSetsLost && maxSetsLost>0){
+          playersMaxSetsLost.push(p.name);
+        }
       });
+      if(playersMaxSetsLost.length>0 && maxSetsLost>0){
+        insightsPeriod.push(`Jugador(es) con más sets perdidos: ${playersMaxSetsLost.join(', ')} (${maxSetsLost} sets perdidos).`);
+      }
 
-      // Generar insights para el período seleccionado
-      const insightsListPeriod = [];
+      // Jugador con más sets ganados
+      let maxSetsWon=0; let playersMaxSetsWon=[];
+      Object.values(efficiencyData).forEach((p)=>{
+        if(p.setsWon>maxSetsWon){
+          maxSetsWon=p.setsWon;playersMaxSetsWon=[p.name];
+        } else if(p.setsWon===maxSetsWon && maxSetsWon>0){
+          playersMaxSetsWon.push(p.name);
+        }
+      });
+      if(playersMaxSetsWon.length>0 && maxSetsWon>0){
+        insightsPeriod.push(`Jugador(es) con más sets ganados: ${playersMaxSetsWon.join(', ')} (${maxSetsWon} sets ganados).`);
+      }
 
-      if (topPlayer) {
-        insightsListPeriod.push(
-          `El jugador más eficiente en el período seleccionado es <strong>${topPlayer}</strong> con una eficiencia de <strong>${topEfficiency.toFixed(
-            2
-          )}%</strong>.`
-        );
+      // Jugador con más victorias consecutivas
+      let maxStreak=0;let playersMaxStreak=[];
+      Object.entries(consecutiveWinsData).forEach(([pl,st])=>{
+        if(st.maxStreak>maxStreak){
+          maxStreak=st.maxStreak;playersMaxStreak=[pl];
+        } else if(st.maxStreak===maxStreak && maxStreak>0){
+          playersMaxStreak.push(pl);
+        }
+      });
+      if(playersMaxStreak.length>0 && maxStreak>0){
+        insightsPeriod.push(`Jugador(es) con más victorias consecutivas: ${playersMaxStreak.join(', ')} (${maxStreak} victorias seguidas).`);
+      }
+
+      // Pareja más activa
+      let maxMatches=0;let mostActivePairs=[];
+      Object.entries(pairMatchesCount).forEach(([pairKey,cnt])=>{
+        if(cnt>maxMatches){
+          maxMatches=cnt;mostActivePairs=[pairKey];
+        } else if(cnt===maxMatches && maxMatches>0){
+          mostActivePairs.push(pairKey);
+        }
+      });
+      if(mostActivePairs.length>0 && maxMatches>0){
+        insightsPeriod.push(`Pareja(s) más activa(s): ${mostActivePairs.join(', ')} (${maxMatches} partidos jugados).`);
+      }
+
+      // Diferencia promedio de sets (para top players)
+      // Ya calculada en diffInsights, topPlayers con mayor eff
+      let diffInsights=[];
+      const maxEffPlayers=Object.keys(allPlayersEfficiency).filter(pl=>allPlayersEfficiency[pl]===topEfficiency);
+      maxEffPlayers.forEach((pl)=>{
+        const p=efficiencyData[pl];
+        const diff=(p.setsWon-p.setsLost)/(p.gamesPlayed||1);
+        const sign=diff>0?`+${diff.toFixed(1)}`:diff.toFixed(1);
+        diffInsights.push(`Diferencia promedio de sets para ${pl}: ${sign}.`);
+      });
+      diffInsights.forEach(d=>insightsPeriod.push(d));
+
+      // Partido más ajustado
+      // bestMatches ya calculados
+      // Elegimos los partidos con menor score, si hay varios:
+      // ya los tenemos en bestMatches
+      if(bestMatches.length>0 && bestScore<Infinity){
+        // Si hay más de uno, los mostramos todos
+        // Ya en bestMatches están con setsCount y difference
+        // Preferencia ya se aplicó en cálculo, si hay tie con sets se guardaron todos
+        bestMatches.forEach((bm)=>{
+          const m=bm.match;
+          const p1=`${m.pair1.player1} & ${m.pair1.player2}`;
+          const p2=`${m.pair2.player1} & ${m.pair2.player2}`;
+          const setsDesc=m.sets.map(s=>`${s.pair1Score}-${s.pair2Score}`).join(', ');
+          insightsPeriod.push(`Partido más ajustado: ${p1} contra ${p2} (${setsDesc}).`);
+        });
+      }
+
+      // Jugador(es) más eficiente(s):
+      if(maxEffPlayers.length>0 && topEfficiency>0){
+        insightsPeriod.push(`Jugador(es) más eficiente(s): ${maxEffPlayers.join(', ')} (${topEfficiency.toFixed(2)}%).`);
       } else {
-        insightsListPeriod.push('No hay suficientes datos para determinar el jugador más eficiente.');
+        insightsPeriod.push('No hay suficientes datos para determinar el jugador más eficiente.');
       }
 
-      let mostSetsWonPlayer = '';
-      let mostSetsWon = 0;
+      setInsightsSelectedPeriod(insightsPeriod);
 
-      Object.values(efficiencyData).forEach((playerData) => {
-        if (playerData.setsWon > mostSetsWon) {
-          mostSetsWon = playerData.setsWon;
-          mostSetsWonPlayer = playerData.name;
-        }
-      });
+      // Insights del mes actual
+      const insightsMonth=[];
 
-      if (mostSetsWonPlayer) {
-        insightsListPeriod.push(
-          `Jugador con más sets ganados: <strong>${mostSetsWonPlayer}</strong>, con <strong>${mostSetsWon}</strong> sets.`
-        );
-      }
+      // Eficiencia este mes vs mes anterior
+      const efficiencyThisMonth={};
+      selectedPlayers.forEach((p)=>{efficiencyThisMonth[p]={gamesWon:0,gamesPlayed:0}});
 
-      let bestPlayerStreak = '';
-      let bestPlayerStreakWins = 0;
-
-      Object.entries(consecutiveWinsData).forEach(([playerName, streakData]) => {
-        if (streakData.maxStreak > bestPlayerStreakWins) {
-          bestPlayerStreakWins = streakData.maxStreak;
-          bestPlayerStreak = playerName;
-        }
-      });
-
-      if (bestPlayerStreak) {
-        insightsListPeriod.push(
-          `Jugador con más victorias consecutivas: <strong>${bestPlayerStreak}</strong>, con <strong>${bestPlayerStreakWins}</strong> victorias consecutivas.`
-        );
-      }
-
-      setInsightsSelectedPeriod(insightsListPeriod);
-
-      // Generar insights para el mes actual
-      const insightsListCurrentMonth = [];
-
-      const efficiencyDataCurrentMonth = {};
-      selectedPlayers.forEach((playerId) => {
-        efficiencyDataCurrentMonth[playerId] = {
-          name: playerId,
-          gamesWon: 0,
-          gamesPlayed: 0,
-        };
-      });
-
-      currentMonthResults.forEach((result) => {
-        const playersInGame = [
-          result.pair1.player1,
-          result.pair1.player2,
-          result.pair2.player1,
-          result.pair2.player2,
-        ];
-
-        playersInGame.forEach((playerName) => {
-          if (selectedPlayers.includes(playerName)) {
-            efficiencyDataCurrentMonth[playerName].gamesPlayed += 1;
-          }
+      currentMonthResults.forEach((r)=>{
+        const pGame=[r.pair1.player1,r.pair1.player2,r.pair2.player1,r.pair2.player2];
+        let p1w=0,p2w=0;
+        r.sets.forEach((s)=>{
+          const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+          if(s1>s2)p1w++;else if(s2>s1)p2w++;
         });
+        const wPair=p1w>p2w?'pair1':'pair2';
 
-        let pair1Wins = 0;
-        let pair2Wins = 0;
-
-        result.sets.forEach((set) => {
-          if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-            pair1Wins += 1;
-          } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-            pair2Wins += 1;
-          }
+        pGame.forEach(pl=>{
+          if(selectedPlayers.includes(pl)) efficiencyThisMonth[pl].gamesPlayed++;
         });
-
-        let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-
-        [result[winningPair].player1, result[winningPair].player2].forEach((playerName) => {
-          if (selectedPlayers.includes(playerName)) {
-            efficiencyDataCurrentMonth[playerName].gamesWon += 1;
-          }
+        [r[wPair].player1,r[wPair].player2].forEach(pl=>{
+          if(selectedPlayers.includes(pl)) efficiencyThisMonth[pl].gamesWon++;
         });
       });
 
-      let topRecentPlayer = '';
-      let topRecentEfficiency = 0;
-
-      Object.values(efficiencyDataCurrentMonth).forEach((playerData) => {
-        const efficiency =
-          playerData.gamesPlayed > 0 ? (playerData.gamesWon / playerData.gamesPlayed) * 100 : 0;
-        if (efficiency > topRecentEfficiency) {
-          topRecentEfficiency = efficiency;
-          topRecentPlayer = playerData.name;
-        }
+      const effThisMonth={};
+      Object.keys(efficiencyThisMonth).forEach(pl=>{
+        const d=efficiencyThisMonth[pl];
+        effThisMonth[pl]=d.gamesPlayed>0?(d.gamesWon/d.gamesPlayed)*100:0;
       });
 
-      if (topRecentPlayer) {
-        insightsListCurrentMonth.push(
-          `El jugador más eficiente del mes actual es <strong>${topRecentPlayer}</strong> con una eficiencia de <strong>${topRecentEfficiency.toFixed(
-            2
-          )}%</strong>.`
-        );
+      const lastMonthStart = dayjs().subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+      const lastMonthEnd = dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
+      const efficiencyLastMonth={};
+      selectedPlayers.forEach((p)=>{efficiencyLastMonth[p]={gamesWon:0,gamesPlayed:0}});
+
+      lastMonthResults.forEach((r)=>{
+        const pGame=[r.pair1.player1,r.pair1.player2,r.pair2.player1,r.pair2.player2];
+        let p1w=0,p2w=0;
+        r.sets.forEach((s)=>{
+          const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+          if(s1>s2)p1w++;else if(s2>s1)p2w++;
+        });
+        const wPair=p1w>p2w?'pair1':'pair2';
+        pGame.forEach(pl=>{
+          if(selectedPlayers.includes(pl)) efficiencyLastMonth[pl].gamesPlayed++;
+        });
+        [r[wPair].player1,r[wPair].player2].forEach(pl=>{
+          if(selectedPlayers.includes(pl)) efficiencyLastMonth[pl].gamesWon++;
+        });
+      });
+
+      const effLastMonth={};
+      Object.keys(efficiencyLastMonth).forEach(pl=>{
+        const d=efficiencyLastMonth[pl];
+        effLastMonth[pl]=d.gamesPlayed>0?(d.gamesWon/d.gamesPlayed)*100:0;
+      });
+
+      let maxImprovement=0;
+      let playersMaxImprovement=[];
+      Object.keys(effThisMonth).forEach(pl=>{
+        const improvement=effThisMonth[pl]-effLastMonth[pl];
+        if(improvement>maxImprovement){
+          maxImprovement=improvement;playersMaxImprovement=[pl];
+        } else if(Math.abs(improvement - maxImprovement)<0.0001 && improvement>0){
+          playersMaxImprovement.push(pl);
+        }
+      });
+      if(playersMaxImprovement.length>0 && maxImprovement>0){
+        insightsMonth.push(`Jugador(es) con mayor mejora en eficiencia: ${playersMaxImprovement.join(', ')} (+${maxImprovement.toFixed(2)}%)`);
       } else {
-        insightsListCurrentMonth.push(
-          'No hay suficientes datos para determinar el jugador más eficiente del mes actual.'
-        );
+        insightsMonth.push('No hay mejora significativa en eficiencia respecto al mes anterior.');
       }
 
-      setInsightsCurrentMonth(insightsListCurrentMonth);
+      // Pareja con más victorias consecutivas en el mes actual
+      const currentMonthPairs={};
+      currentMonthResults.forEach((r)=>{
+        const p1=[r.pair1.player1,r.pair1.player2].sort().join(' & ');
+        const p2=[r.pair2.player1,r.pair2.player2].sort().join(' & ');
+        if(!currentMonthPairs[p1]) currentMonthPairs[p1]={currentStreak:0,maxStreak:0,lastWin:false};
+        if(!currentMonthPairs[p2]) currentMonthPairs[p2]={currentStreak:0,maxStreak:0,lastWin:false};
+
+        let p1w=0,p2w=0;
+        r.sets.forEach((s)=>{
+          const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+          if(s1>s2)p1w++;else if(s2>s1)p2w++;
+        });
+        const wp = p1w>p2w?p1:p2;
+        const lp = wp===p1?p2:p1;
+
+        if(currentMonthPairs[wp].lastWin===false){
+          currentMonthPairs[wp].currentStreak=1;
+          currentMonthPairs[wp].lastWin=true;
+        } else {
+          currentMonthPairs[wp].currentStreak+=1;
+        }
+        if(currentMonthPairs[wp].currentStreak>currentMonthPairs[wp].maxStreak)
+          currentMonthPairs[wp].maxStreak=currentMonthPairs[wp].currentStreak;
+
+        currentMonthPairs[lp].lastWin=false;
+        currentMonthPairs[lp].currentStreak=0;
+      });
+
+      let maxPairStreakMonth=0; let pairsMaxStreakMonth=[];
+      Object.entries(currentMonthPairs).forEach(([pairKey,d])=>{
+        if(d.maxStreak>maxPairStreakMonth){
+          maxPairStreakMonth=d.maxStreak;pairsMaxStreakMonth=[pairKey];
+        } else if(d.maxStreak===maxPairStreakMonth && maxPairStreakMonth>0){
+          pairsMaxStreakMonth.push(pairKey);
+        }
+      });
+      if(pairsMaxStreakMonth.length>0&&maxPairStreakMonth>0){
+        insightsMonth.push(`Pareja(s) con más victorias consecutivas (mes actual): ${pairsMaxStreakMonth.join(', ')} (${maxPairStreakMonth} victorias seguidas).`);
+      }
+
+      setInsightsCurrentMonth(insightsMonth);
     };
 
     fetchData();
-  }, [selectedPlayers, startDate, endDate, players, trendInterval]);
+  }, [selectedPlayers, startDate, endDate, players, trendInterval, lastMonthResults]);
 
-  // Manejo de eventos
   const handlePlayerChange = (event) => {
-    const {
-      target: { value },
-    } = event;
+    const { target: { value } } = event;
     setSelectedPlayers(typeof value === 'string' ? value.split(',') : value);
   };
 
@@ -734,142 +865,36 @@ const StatsCharts = () => {
     setTabIndex(newValue);
   };
 
-  // Función para exportar gráficos como imagen
-  const exportChartAsImage = async (chartRef, chartName) => {
-    if (!chartRef.current) return;
-    const canvas = await html2canvas(chartRef.current);
-    canvas.toBlob((blob) => {
-      saveAs(blob, `${chartName}.png`);
-    });
-  };
+  // Filtrado avanzado en Historial:
+  // Sin date pickers en historial (quitados)
+  // Sin búsqueda general, solo por jugador y pareja
+  // Paginación en historial
 
-  // Opciones para los gráficos
-  const barChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        title: {
-          display: true,
-          text: 'Eficiencia (%)',
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Jugadores',
-        },
-      },
-    },
-  };
-
-  const stackedBarChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Número de Sets',
-        },
-        stacked: true,
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Jugadores',
-        },
-        stacked: true,
-      },
-    },
-  };
-
-  const pairEfficiencyChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        title: {
-          display: true,
-          text: 'Eficiencia (%)',
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Parejas',
-        },
-      },
-    },
-  };
-
-  const lineChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 100,
-        title: {
-          display: true,
-          text: 'Eficiencia (%)',
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Fechas',
-        },
-      },
-    },
-  };
-
-  const pieChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'bottom',
-      },
-    },
-  };
-
-  const monthlyChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Partidos Jugados',
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Meses',
-        },
-      },
-    },
-  };
-
-  // Función para filtrar y buscar en la tabla de historial
   const filteredMatchHistory = matchHistory.filter((match) => {
-    const search = searchText.toLowerCase();
-    return (
-      match.pair1.player1.toLowerCase().includes(search) ||
-      match.pair1.player2.toLowerCase().includes(search) ||
-      match.pair2.player1.toLowerCase().includes(search) ||
-      match.pair2.player2.toLowerCase().includes(search)
-    );
+    let passPlayer=true;
+    if(searchPlayerFilter && searchPlayerFilter!==''){
+      const p=searchPlayerFilter.toLowerCase();
+      const pInGame=[match.pair1.player1,match.pair1.player2,match.pair2.player1,match.pair2.player2].map(x=>x.toLowerCase());
+      if(!pInGame.includes(p)) passPlayer=false;
+    }
+
+    let passPair=true;
+    if(searchPairFilter && searchPairFilter!==''){
+      const pairKey=searchPairFilter.toLowerCase();
+      const p1=[match.pair1.player1.toLowerCase(),match.pair1.player2.toLowerCase()].sort().join(' & ');
+      const p2=[match.pair2.player1.toLowerCase(),match.pair2.player2.toLowerCase()].sort().join(' & ');
+      if(p1!==pairKey && p2!==pairKey) passPair=false;
+    }
+
+    return passPlayer && passPair;
   });
+
+  const totalHistoryPages = Math.ceil(filteredMatchHistory.length / itemsPerPage);
+  const handleHistoryPageChange = (event, value) => {
+    setCurrentPage(value);
+  };
+  const startIndex=(currentPage-1)*itemsPerPage;
+  const paginatedHistory=filteredMatchHistory.slice(startIndex,startIndex+itemsPerPage);
 
   return (
     <Container maxWidth="lg" sx={{ marginTop: '20px' }}>
@@ -878,674 +903,495 @@ const StatsCharts = () => {
         <Typography variant="h5">Estadísticas Avanzadas</Typography>
       </Box>
 
-      {/* Date Range Pickers */}
-      <Box sx={{ marginBottom: '20px', marginTop: '20px' }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={6} sm={3} md={2}>
-            <DatePicker
-              label="Fecha de Inicio"
-              value={startDate}
-              onChange={(date) => setStartDate(date)}
-              renderInput={(params) => <TextField {...params} fullWidth />}
-              inputFormat="DD/MM/YYYY"
-            />
-          </Grid>
-          <Grid item xs={6} sm={3} md={2}>
-            <DatePicker
-              label="Fecha Final"
-              value={endDate}
-              onChange={(date) => setEndDate(date)}
-              renderInput={(params) => <TextField {...params} fullWidth />}
-              inputFormat="DD/MM/YYYY"
-            />
-          </Grid>
-        </Grid>
-      </Box>
+      {/* Popover para Tooltips */}
+      <Popover
+        open={openPopover}
+        anchorEl={anchorEl}
+        onClose={handlePopoverClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Typography sx={{ p: 2 }}>{popoverContent}</Typography>
+      </Popover>
 
-      {/* Navegación Simplificada con Tabs */}
       <Tabs
         value={tabIndex}
         onChange={handleTabChange}
         variant="fullWidth"
-        aria-label="Tabs de navegación"
-        sx={{
-          marginBottom: '20px',
-          '& .MuiTabs-indicator': {
-            transition: 'all 0.3s',
-          },
-        }}
+        sx={{ marginBottom: '20px' }}
       >
         <Tab label="Resumen" />
         <Tab label="Gráficos" />
         <Tab label="Historial de Partidos" />
       </Tabs>
 
-      {/* Popover para Tooltips */}
-      <Popover
-        open={openPopover}
-        anchorEl={anchorEl}
-        onClose={handlePopoverClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-      >
-        <Typography sx={{ p: 2 }}>{popoverContent}</Typography>
-      </Popover>
-
-      {/* Contenido de las Tabs */}
-      <TransitionGroup>
-        {tabIndex === 0 && (
-          <Fade in timeout={500}>
-            <Box sx={{ marginTop: '20px' }}>
-              {/* Resumen */}
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6} md={4}>
-                  {/* Tooltip adaptado para móviles */}
-                  <Box
-                    sx={{
-                      textAlign: 'center',
-                      border: '1px solid #ccc',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      position: 'relative',
-                    }}
-                  >
-                    <Typography variant="h6">
-                      Total de Sets Jugados
-                      <IconButton
-                        size="small"
-                        onClick={(e) =>
-                          handlePopoverOpen(
-                            e,
-                            'Número total de sets jugados en el rango seleccionado.'
-                          )
-                        }
-                      >
-                        <InfoIcon fontSize="small" />
-                      </IconButton>
-                    </Typography>
-                    <Typography variant="h4">{summaryData.totalSets}</Typography>
-                  </Box>
+      {tabIndex === 0 && (
+        <Fade in timeout={500}>
+          <Box sx={{ marginTop: '20px' }}>
+            {/* Date pickers mes-año en Resumen */}
+            <Box sx={{ marginBottom: '20px' }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={6} sm={3} md={2}>
+                  <DatePicker
+                    label="Fecha de Inicio"
+                    value={startDate}
+                    onChange={(date) => setStartDate(date)}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    views={['year','month']}
+                    inputFormat="MM/YYYY"
+                  />
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
-                  <Box
-                    sx={{
-                      textAlign: 'center',
-                      border: '1px solid #ccc',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      position: 'relative',
-                    }}
-                  >
-                    <Typography variant="h6">
-                      Rendimiento Máximo
-                      <IconButton
-                        size="small"
-                        onClick={(e) =>
-                          handlePopoverOpen(
-                            e,
-                            'Jugador con el mayor porcentaje de victorias acumuladas dentro del rango de fechas seleccionado.'
-                          )
-                        }
-                      >
-                        <InfoIcon fontSize="small" />
-                      </IconButton>
-                    </Typography>
-                    <Typography variant="h4">{summaryData.topPlayer}</Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={12} sm={6} md={4}>
-                  <Box
-                    sx={{
-                      textAlign: 'center',
-                      border: '1px solid #ccc',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      position: 'relative',
-                    }}
-                  >
-                    <Typography variant="h6">
-                      Partidos Ganados
-                      <IconButton
-                        size="small"
-                        onClick={(e) =>
-                          handlePopoverOpen(
-                            e,
-                            `Cantidad de partidos ganados por el jugador con el mejor rendimiento: ${summaryData.topPlayer}.`
-                          )
-                        }
-                      >
-                        <InfoIcon fontSize="small" />
-                      </IconButton>
-                    </Typography>
-                    <Typography variant="h4">{summaryData.topPlayerWins}</Typography>
-                  </Box>
+                <Grid item xs={6} sm={3} md={2}>
+                  <DatePicker
+                    label="Fecha Final"
+                    value={endDate}
+                    onChange={(date) => setEndDate(date)}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    views={['year','month']}
+                    inputFormat="MM/YYYY"
+                  />
                 </Grid>
               </Grid>
-
-              {/* Panel de Insights */}
-              <Box sx={{ marginTop: '20px' }}>
-                {/* Insights del período seleccionado */}
-                <Typography variant="h6" gutterBottom>
-                  Insights del Período Seleccionado ({startDate.format('DD/MM/YYYY')} -{' '}
-                  {endDate.format('DD/MM/YYYY')})
-                </Typography>
-                <Divider sx={{ marginBottom: '10px' }} />
-                {isSmallScreen ? (
-                  <TransitionGroup>
-                    {insightsSelectedPeriod.map((insight, index) => (
-                      <Fade in timeout={500} key={index}>
-                        <Card sx={{ marginBottom: '10px' }}>
-                          <CardContent>
-                            <Typography
-                              variant="body1"
-                              component="div"
-                              dangerouslySetInnerHTML={{ __html: insight }}
-                            />
-                          </CardContent>
-                        </Card>
-                      </Fade>
-                    ))}
-                  </TransitionGroup>
-                ) : (
-                  <Paper sx={{ padding: '10px' }}>
-                    <ul style={{ paddingLeft: '20px' }}>
-                      {insightsSelectedPeriod.map((insight, index) => (
-                        <li key={index}>
-                          <Typography
-                            variant="body1"
-                            component="div"
-                            dangerouslySetInnerHTML={{ __html: insight }}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </Paper>
-                )}
-
-                {/* Insights del mes actual */}
-                <Typography variant="h6" gutterBottom sx={{ marginTop: '20px' }}>
-                  Insights del Mes Actual
-                </Typography>
-                <Divider sx={{ marginBottom: '10px' }} />
-                {isSmallScreen ? (
-                  <TransitionGroup>
-                    {insightsCurrentMonth.map((insight, index) => (
-                      <Fade in timeout={500} key={index}>
-                        <Card sx={{ marginBottom: '10px' }}>
-                          <CardContent>
-                            <Typography
-                              variant="body1"
-                              component="div"
-                              dangerouslySetInnerHTML={{ __html: insight }}
-                            />
-                          </CardContent>
-                        </Card>
-                      </Fade>
-                    ))}
-                  </TransitionGroup>
-                ) : (
-                  <Paper sx={{ padding: '10px' }}>
-                    <ul style={{ paddingLeft: '20px' }}>
-                      {insightsCurrentMonth.map((insight, index) => (
-                        <li key={index}>
-                          <Typography
-                            variant="body1"
-                            component="div"
-                            dangerouslySetInnerHTML={{ __html: insight }}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </Paper>
-                )}
-              </Box>
             </Box>
-          </Fade>
-        )}
 
-        {/* TAB 1: Gráficos */}
-        {tabIndex === 1 && (
-          <Fade in timeout={500}>
-            <Box sx={{ marginTop: '20px' }}>
-              {/* Filtros */}
-              <Box sx={{ marginBottom: '20px' }}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} sm={6} md={4}>
-                    <FormControl fullWidth>
-                      <InputLabel id="player-select-label">Seleccionar Jugadores</InputLabel>
-                      <Select
-                        labelId="player-select-label"
-                        id="player-select"
-                        multiple
-                        value={selectedPlayers}
-                        onChange={handlePlayerChange}
-                        input={<OutlinedInput label="Seleccionar Jugadores" />}
-                        renderValue={(selected) => selected.join(', ')}
-                      >
-                        {players.map((player) => (
-                          <MenuItem key={player.id} value={player.id}>
-                            <Checkbox checked={selectedPlayers.indexOf(player.id) > -1} />
-                            <ListItemText primary={player.name} />
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid item xs={6} sm={3} md={2}>
-                    <DatePicker
-                      label="Fecha de Inicio"
-                      value={startDate}
-                      onChange={(date) => setStartDate(date)}
-                      renderInput={(params) => <TextField {...params} fullWidth />}
-                      inputFormat="DD/MM/YYYY"
-                    />
-                  </Grid>
-                  <Grid item xs={6} sm={3} md={2}>
-                    <DatePicker
-                      label="Fecha Final"
-                      value={endDate}
-                      onChange={(date) => setEndDate(date)}
-                      renderInput={(params) => <TextField {...params} fullWidth />}
-                      inputFormat="DD/MM/YYYY"
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
+            {/* Resumen */}
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={4}>
+                <Box sx={{ textAlign: 'center', border: '1px solid #ccc', padding:'10px', borderRadius:'8px' }}>
+                  <Typography variant="h6">
+                    Total de Sets Jugados
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handlePopoverOpen(e,'Número total de sets jugados en el rango seleccionado.')}
+                    >
+                      <InfoIcon fontSize="small" />
+                    </IconButton>
+                  </Typography>
+                  <Typography variant="h4">{summaryData.totalSets}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Box sx={{ textAlign: 'center', border: '1px solid #ccc', padding:'10px', borderRadius:'8px' }}>
+                  <Typography variant="h6">
+                    Rendimiento Máximo
+                    <IconButton
+                      size="small"
+                      onClick={(e)=>
+                        handlePopoverOpen(e,'Jugador con el mayor porcentaje de victorias acumuladas dentro del rango de fechas seleccionado.')
+                      }
+                    >
+                      <InfoIcon fontSize="small" />
+                    </IconButton>
+                  </Typography>
+                  <Typography variant="h4">{summaryData.topPlayer}</Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <Box sx={{ textAlign: 'center', border: '1px solid #ccc', padding:'10px', borderRadius:'8px' }}>
+                  <Typography variant="h6">
+                    Partidos Ganados
+                    <IconButton
+                      size="small"
+                      onClick={(e)=>
+                        handlePopoverOpen(e,`Cantidad de partidos ganados por el jugador con el mejor rendimiento: ${summaryData.topPlayer}.`)
+                      }
+                    >
+                      <InfoIcon fontSize="small" />
+                    </IconButton>
+                  </Typography>
+                  <Typography variant="h4">{summaryData.topPlayerWins}</Typography>
+                </Box>
+              </Grid>
+            </Grid>
 
-              {/* Indicar periodo de tiempo */}
-              <Typography variant="subtitle1" gutterBottom>
-                Gráficos para el rango de fechas seleccionado:{' '}
-                <strong>
-                  {startDate.format('DD/MM/YYYY')} - {endDate.format('DD/MM/YYYY')}
-                </strong>
+            <Box sx={{ marginTop:'20px' }}>
+              <Typography variant="h6" gutterBottom>
+                Insights del Período Seleccionado ({startDate.format('DD/MM/YYYY')} - {endDate.format('DD/MM/YYYY')})
               </Typography>
+              <Divider sx={{ marginBottom:'10px' }} />
+              <Paper sx={{ padding:'10px' }}>
+                {insightsSelectedPeriod.map((insight, index) => (
+                  <React.Fragment key={index}>
+                    {renderInsight(insight)}
+                  </React.Fragment>
+                ))}
+              </Paper>
 
-              {/* Gráficos */}
-              <Grid container spacing={4}>
-                {/* Gráfico de Barras: Eficiencia de los Jugadores */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Eficiencia de los Jugadores (%)
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra la eficiencia de los jugadores seleccionados en términos de porcentaje de victorias.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {barChartData ? (
-                      <>
-                        <Box ref={chartRefs.barChart} sx={{ height: '100%' }}>
-                          <Bar data={barChartData} options={barChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() => exportChartAsImage(chartRefs.barChart, 'Eficiencia_Jugadores')}
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Barras.</p>
-                    )}
-                  </Box>
-                </Grid>
+              <Typography variant="h6" gutterBottom sx={{ marginTop:'20px' }}>
+                Insights del Mes Actual
+              </Typography>
+              <Divider sx={{ marginBottom:'10px' }} />
+              <Paper sx={{ padding:'10px' }}>
+                {insightsCurrentMonth.map((insight, index) => (
+                  <React.Fragment key={index}>
+                    {renderInsight(insight)}
+                  </React.Fragment>
+                ))}
+              </Paper>
+            </Box>
+          </Box>
+        </Fade>
+      )}
 
-                {/* Gráfico de Barras Apiladas: Sets Ganados y Perdidos */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Sets Ganados y Perdidos por Jugador
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra el número de sets ganados y perdidos por cada jugador.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {stackedBarChartData ? (
-                      <>
-                        <Box ref={chartRefs.stackedBarChart} sx={{ height: '100%' }}>
-                          <Bar data={stackedBarChartData} options={stackedBarChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() =>
-                            exportChartAsImage(chartRefs.stackedBarChart, 'Sets_Ganados_Perdidos')
-                          }
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Barras Apiladas.</p>
-                    )}
-                  </Box>
-                </Grid>
-
-                {/* Gráfico de Tendencia de Eficiencia Acumulada */}
-                <Grid item xs={12}>
-                  {/* Mover el selector de intervalo de tendencia aquí */}
-                  <FormControl fullWidth sx={{ marginBottom: '10px' }}>
-                    <InputLabel id="trend-interval-label">Intervalo de Tendencia</InputLabel>
+      {tabIndex === 1 && (
+        <Fade in timeout={500}>
+          <Box sx={{ marginTop:'20px' }}>
+            {/* Filtros en pestaña Gráficos */}
+            <Box sx={{ marginBottom:'20px' }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={6} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel id="player-select-label">Seleccionar Jugadores</InputLabel>
                     <Select
-                      labelId="trend-interval-label"
-                      id="trend-interval-select"
-                      value={trendInterval}
-                      onChange={handleTrendIntervalChange}
-                      label="Intervalo de Tendencia"
+                      labelId="player-select-label"
+                      multiple
+                      value={selectedPlayers}
+                      onChange={handlePlayerChange}
+                      input={<OutlinedInput label="Seleccionar Jugadores" />}
+                      renderValue={(selected)=>selected.join(', ')}
                     >
-                      <MenuItem value="Día">Día</MenuItem>
-                      <MenuItem value="Semana">Semana</MenuItem>
-                      <MenuItem value="Mes">Mes</MenuItem>
+                      {players.map((player)=>(
+                        <MenuItem key={player.id} value={player.id}>
+                          <Checkbox checked={selectedPlayers.indexOf(player.id)>-1}/>
+                          <ListItemText primary={player.name}/>
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
-                  <Typography variant="h6" gutterBottom>
-                    Tendencia de Eficiencia Acumulada
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra la tendencia de eficiencia acumulada de los jugadores a lo largo del tiempo.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {lineChartData ? (
-                      <>
-                        <Box ref={chartRefs.lineChart} sx={{ height: '100%' }}>
-                          <Line data={lineChartData} options={lineChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() => exportChartAsImage(chartRefs.lineChart, 'Tendencia_Eficiencia')}
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Líneas.</p>
-                    )}
-                  </Box>
                 </Grid>
-
-                {/* Gráfico de Rendimiento en Parejas */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Rendimiento de las Parejas
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra la eficiencia de cada pareja de jugadores.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {pairEfficiencyChartData ? (
-                      <>
-                        <Box ref={chartRefs.pairEfficiencyChart} sx={{ height: '100%' }}>
-                          <Bar data={pairEfficiencyChartData} options={pairEfficiencyChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() =>
-                            exportChartAsImage(chartRefs.pairEfficiencyChart, 'Rendimiento_Parejas')
-                          }
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Rendimiento en Parejas.</p>
-                    )}
-                  </Box>
+                <Grid item xs={6} sm={3} md={2}>
+                  <DatePicker
+                    label="Fecha de Inicio"
+                    value={startDate}
+                    onChange={(date)=>setStartDate(date)}
+                    renderInput={(params)=><TextField {...params} fullWidth/>}
+                    inputFormat="DD/MM/YYYY"
+                  />
                 </Grid>
-
-                {/* Gráfico de Pastel: Victorias por Parejas */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Victorias por Parejas
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra la distribución de victorias entre las diferentes parejas.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {pieChartData ? (
-                      <>
-                        <Box ref={chartRefs.pieChart} sx={{ height: '100%' }}>
-                          <Pie data={pieChartData} options={pieChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() => exportChartAsImage(chartRefs.pieChart, 'Victorias_Parejas')}
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Pastel.</p>
-                    )}
-                  </Box>
-                </Grid>
-
-                {/* Gráfico Mensual: Partidos Jugados por Mes */}
-                <Grid item xs={12}>
-                  <Typography variant="h6" gutterBottom>
-                    Partidos Jugados por Mes
-                    <IconButton
-                      size="small"
-                      onClick={(e) =>
-                        handlePopoverOpen(
-                          e,
-                          'Este gráfico muestra el número de partidos jugados en cada mes.'
-                        )
-                      }
-                    >
-                      <InfoIcon fontSize="small" />
-                    </IconButton>
-                  </Typography>
-                  <Box sx={{ position: 'relative', height: isSmallScreen ? '300px' : '500px' }}>
-                    {monthlyChartData ? (
-                      <>
-                        <Box ref={chartRefs.monthlyChart} sx={{ height: '100%' }}>
-                          <Bar data={monthlyChartData} options={monthlyChartOptions} />
-                        </Box>
-                        <IconButton
-                          onClick={() => exportChartAsImage(chartRefs.monthlyChart, 'Partidos_Por_Mes')}
-                          sx={{ position: 'absolute', top: 0, right: 0 }}
-                        >
-                          <FileDownloadIcon />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <p>No hay datos disponibles para el Gráfico de Actividad Mensual.</p>
-                    )}
-                  </Box>
+                <Grid item xs={6} sm={3} md={2}>
+                  <DatePicker
+                    label="Fecha Final"
+                    value={endDate}
+                    onChange={(date)=>setEndDate(date)}
+                    renderInput={(params)=><TextField {...params} fullWidth/>}
+                    inputFormat="DD/MM/YYYY"
+                  />
                 </Grid>
               </Grid>
             </Box>
-          </Fade>
-        )}
 
-        {/* TAB 2: Historial de Partidos */}
-        {tabIndex === 2 && (
-          <Fade in timeout={500}>
-            <Box sx={{ marginTop: '20px' }}>
-              {/* Historial de Partidos */}
-              <Typography variant="h6" gutterBottom>
-                Historial de Partidos
-              </Typography>
+            <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+              Rango activo: {startDate.format('DD/MM/YYYY')} - {endDate.format('DD/MM/YYYY')}
+            </Typography>
 
-              {/* Barra de búsqueda */}
-              <Box sx={{ marginBottom: '10px' }}>
-                <TextField
-                  variant="outlined"
-                  fullWidth
-                  placeholder="Buscar por jugador..."
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
+            {/* Intervalo de Tendencia sobre el gráfico de tendencia */}
+            <FormControl fullWidth sx={{ marginBottom: '10px' }}>
+              <InputLabel id="trend-interval-label">Intervalo de Tendencia</InputLabel>
+              <Select
+                labelId="trend-interval-label"
+                id="trend-interval-select"
+                value={trendInterval}
+                onChange={handleTrendIntervalChange}
+                label="Intervalo de Tendencia"
+              >
+                <MenuItem value="Día">Día</MenuItem>
+                <MenuItem value="Semana">Semana</MenuItem>
+                <MenuItem value="Mes">Mes</MenuItem>
+              </Select>
+            </FormControl>
 
-              {isSmallScreen ? (
-                // Mostrar como tarjetas en móvil
-                <Grid container spacing={2}>
-                  {filteredMatchHistory
-                    .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)))
-                    .map((match, index) => {
-                      // Determinar el ganador
-                      let pair1Wins = 0;
-                      let pair2Wins = 0;
+            <Grid container spacing={4}>
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Eficiencia de los Jugadores (%)
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra la eficiencia de los jugadores seleccionados en términos de porcentaje de victorias.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de eficiencia de jugadores">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.barChart}>
+                    {barChartData?(
+                      <>
+                        <Bar data={barChartData} options={barChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.barChart,'Eficiencia_Jugadores')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
 
-                      match.sets.forEach((set) => {
-                        if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-                          pair1Wins += 1;
-                        } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-                          pair2Wins += 1;
-                        }
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Sets Ganados y Perdidos por Jugador
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra el número de sets ganados y perdidos por cada jugador.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de sets ganados/perdidos">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.stackedBarChart}>
+                    {stackedBarChartData?(
+                      <>
+                        <Bar data={stackedBarChartData} options={stackedBarChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.stackedBarChart,'Sets_Ganados_Perdidos')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Tendencia de Eficiencia Acumulada
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra la tendencia de eficiencia acumulada de los jugadores a lo largo del tiempo.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de tendencia de eficiencia">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.lineChart}>
+                    {lineChartData?(
+                      <>
+                        <Line data={lineChartData} options={lineChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.lineChart,'Tendencia_Eficiencia')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Rendimiento de las Parejas
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra la eficiencia de cada pareja de jugadores.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de rendimiento en parejas">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.pairEfficiencyChart}>
+                    {pairEfficiencyChartData?(
+                      <>
+                        <Bar data={pairEfficiencyChartData} options={pairEfficiencyChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.pairEfficiencyChart,'Rendimiento_Parejas')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Victorias por Parejas
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra la distribución de victorias entre las diferentes parejas.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de victorias por parejas">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.pieChart}>
+                    {pieChartData?(
+                      <>
+                        <Pie data={pieChartData} options={pieChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.pieChart,'Victorias_Parejas')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Partidos Jugados por Mes
+                  <IconButton
+                    size="small"
+                    onClick={(e)=>
+                      handlePopoverOpen(e,'Este gráfico muestra el número de partidos jugados en cada mes.')
+                    }
+                  >
+                    <InfoIcon fontSize="small"/>
+                  </IconButton>
+                </Typography>
+                <Tooltip title="Gráfico de partidos por mes">
+                  <Box sx={{ position:'relative', height:isSmallScreen?'300px':'500px' }} ref={chartRefs.monthlyChart}>
+                    {monthlyChartData?(
+                      <>
+                        <Bar data={monthlyChartData} options={monthlyChartOptions}/>
+                        <IconButton
+                          onClick={()=>exportChartAsImage(chartRefs.monthlyChart,'Partidos_Por_Mes')}
+                          sx={{ position:'absolute', top:0, right:0 }}
+                        >
+                          <FileDownloadIcon/>
+                        </IconButton>
+                      </>
+                    ):<p>No hay datos.</p>}
+                  </Box>
+                </Tooltip>
+              </Grid>
+            </Grid>
+          </Box>
+        </Fade>
+      )}
+
+      {tabIndex === 2 && (
+        <Fade in timeout={500}>
+          <Box sx={{ marginTop: '20px' }}>
+            {/* Filtros en Historial (sin date pickers ni búsqueda general) */}
+            <Box sx={{ marginBottom:'20px' }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={6} sm={3} md={2}>
+                  <TextField
+                    label="Jugador"
+                    variant="outlined"
+                    fullWidth
+                    value={searchPlayerFilter}
+                    onChange={(e)=>setSearchPlayerFilter(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={3} md={2}>
+                  <FormControl fullWidth>
+                    <InputLabel id="pair-filter-label">Pareja</InputLabel>
+                    <Select
+                      labelId="pair-filter-label"
+                      value={searchPairFilter}
+                      onChange={(e)=>setSearchPairFilter(e.target.value)}
+                      label="Pareja"
+                    >
+                      <MenuItem value="">(Todas)</MenuItem>
+                      {(() => {
+                        const allPairsSet = new Set();
+                        matchHistory.forEach(m=>{
+                          const p1=[m.pair1.player1,m.pair1.player2].sort().join(' & ');
+                          const p2=[m.pair2.player1,m.pair2.player2].sort().join(' & ');
+                          allPairsSet.add(p1);allPairsSet.add(p2);
+                        });
+                        const allPairs=Array.from(allPairsSet).sort();
+                        return allPairs.map((p)=>(
+                          <MenuItem key={p} value={p}>{p}</MenuItem>
+                        ));
+                      })()}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Box>
+
+            <Typography variant="h6" gutterBottom>
+              Historial de Partidos
+            </Typography>
+
+            {/* Lista paginada */}
+            <TableContainer component={Paper}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Fecha</TableCell>
+                    <TableCell>Pareja 1</TableCell>
+                    <TableCell>Pareja 2</TableCell>
+                    <TableCell>Ganadores</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedHistory
+                    .sort((a,b)=>dayjs(b.date).diff(dayjs(a.date)))
+                    .map((match,index)=>{
+                      let p1Wins=0,p2Wins=0;
+                      match.sets.forEach(s=>{
+                        const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+                        if(s1>s2)p1Wins++;else if(s2>s1)p2Wins++;
                       });
-
-                      let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-                      const winnerPlayers = [
-                        match[winningPair].player1,
-                        match[winningPair].player2,
-                      ].join(' & ');
-
+                      const wPair=p1Wins>p2Wins?'pair1':'pair2';
+                      const wPlayers=`${match[wPair].player1} & ${match[wPair].player2}`;
                       return (
-                        <Grid item xs={12} key={index}>
-                          <Card>
-                            <CardContent>
-                              <Typography variant="subtitle1">
-                                Fecha: {dayjs(match.date).format('DD/MM/YYYY')}
-                              </Typography>
-                              <Typography variant="body1">
-                                Pareja 1: {match.pair1.player1} & {match.pair1.player2}
-                              </Typography>
-                              <Typography variant="body1">
-                                Pareja 2: {match.pair2.player1} & {match.pair2.player2}
-                              </Typography>
-                              <Typography variant="body1">
-                                Ganadores: <strong>{winnerPlayers}</strong>
-                              </Typography>
-                            </CardContent>
-                          </Card>
-                        </Grid>
+                        <TableRow key={index}>
+                          <TableCell>{dayjs(match.date).format('DD/MM/YYYY')}</TableCell>
+                          <TableCell>{match.pair1.player1} & {match.pair1.player2}</TableCell>
+                          <TableCell>{match.pair2.player1} & {match.pair2.player2}</TableCell>
+                          <TableCell><strong>{wPlayers}</strong></TableCell>
+                        </TableRow>
                       );
                     })}
-                </Grid>
-              ) : (
-                // Mostrar como tabla en escritorio
-                <TableContainer component={Paper}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Fecha</TableCell>
-                        <TableCell>Pareja 1</TableCell>
-                        <TableCell>Pareja 2</TableCell>
-                        <TableCell>Ganadores</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredMatchHistory
-                        .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)))
-                        .map((match, index) => {
-                          // Determinar el ganador
-                          let pair1Wins = 0;
-                          let pair2Wins = 0;
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-                          match.sets.forEach((set) => {
-                            if (parseInt(set.pair1Score) > parseInt(set.pair2Score)) {
-                              pair1Wins += 1;
-                            } else if (parseInt(set.pair2Score) > parseInt(set.pair1Score)) {
-                              pair2Wins += 1;
-                            }
-                          });
+            {totalHistoryPages>1 && (
+              <Box sx={{ display:'flex', justifyContent:'center', marginTop:'20px' }}>
+                <Pagination
+                  count={totalHistoryPages}
+                  page={currentPage}
+                  onChange={handleHistoryPageChange}
+                  color="primary"
+                />
+              </Box>
+            )}
 
-                          let winningPair = pair1Wins > pair2Wins ? 'pair1' : 'pair2';
-                          const winnerPlayers = [
-                            match[winningPair].player1,
-                            match[winningPair].player2,
-                          ].join(' & ');
+          </Box>
+        </Fade>
+      )}
 
-                          return (
-                            <TableRow key={index}>
-                              <TableCell>{dayjs(match.date).format('DD/MM/YYYY')}</TableCell>
-                              <TableCell>
-                                {match.pair1.player1} & {match.pair1.player2}
-                              </TableCell>
-                              <TableCell>
-                                {match.pair2.player1} & {match.pair2.player2}
-                              </TableCell>
-                              <TableCell>
-                                <strong>{winnerPlayers}</strong>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </Box>
-          </Fade>
-        )}
-      </TransitionGroup>
-
-      {/* Botón de Volver a Página Principal */}
-      <Box sx={{ marginTop: '20px', textAlign: 'center' }}>
+      <Box sx={{ marginTop: '20px', textAlign:'center' }}>
         <Button
           variant="contained"
           sx={{
-            backgroundColor: 'black',
-            color: 'white',
-            '&:hover': {
-              backgroundColor: '#333',
+            backgroundColor:'black',
+            color:'white',
+            borderRadius:'30px',
+            padding:'10px 20px',
+            textTransform:'none',
+            '&:hover':{
+              backgroundColor:'#333',
             },
           }}
-          onClick={() => navigate('/')}
+          onClick={()=>navigate('/')}
         >
-          Volver a Página Principal
+          Volver a la pantalla principal
         </Button>
       </Box>
     </Container>
