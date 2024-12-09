@@ -85,13 +85,8 @@ const MatchInfo = () => {
   const [minDate, setMinDate] = useState(null);
   const [maxDate, setMaxDate] = useState(null);
 
-  const ordinalMap = {
-    1:'Primer', 2:'Segundo', 3:'Tercer', 4:'Cuarto', 5:'Quinto'
-  };
-
-  // Agregar estado para paginación del historial de ciclos
   const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
-  const cyclesPerPage = 5; // Número de ciclos por página en el historial
+  const cyclesPerPage = 5;
 
   const loadData = async () => {
     const cyclesSnap = await getDocs(collection(db, 'cycles'));
@@ -137,7 +132,6 @@ const MatchInfo = () => {
     let loadedResults = [];
     resultsSnap.forEach(docu => {
       const r = docu.data();
-      // Calcular ganador
       let pair1SetsWon=0;
       let pair2SetsWon=0;
       if (r.sets && r.sets.length>0) {
@@ -179,7 +173,6 @@ const MatchInfo = () => {
 
     setResults(loadedResults);
 
-    // Determinar el número de partido en cada ciclo
     for (const c of loadedCycles) {
       const cycleMatches = loadedResults.filter(m=>m.cycleId===c.id && m.winner && m.loser).sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
       cycleMatches.forEach((m,i)=>{
@@ -189,7 +182,6 @@ const MatchInfo = () => {
 
     setResults([...loadedResults]);
 
-    // Próximo partido
     if (current) {
       const cycleResults = loadedResults.filter(m => m.cycleId===current.id && m.winner && m.loser);
       let lastMatchDate = null;
@@ -229,10 +221,8 @@ const MatchInfo = () => {
         setPreviousNoMatchMessage('');
       }
 
-      // Usar la longitud de cycles para determinar el ciclo disputado
-      const cycleCount = cycles.length;
-      const cycleOrdinal = ordinalMap[cycleCount] || `${cycleCount}º`;
-      setNextMatchInfo(`${cycleOrdinal} ciclo disputado`);
+      // Actualizar el texto del ciclo disputado con la cantidad de ciclos cargados
+      setNextMatchInfo(`${loadedCycles.length}º ciclo disputado`);
     } else {
       setNextMatchInfo('');
       setNextMatchDate(null);
@@ -291,11 +281,6 @@ const MatchInfo = () => {
     return names.map(n=>n.charAt(0)).join('&');
   };
 
-  const matchOrdinal = (n) => {
-    if (ordinalMap[n]) return ordinalMap[n];
-    return n+'º';
-  };
-
   const getSetsString = (sets) => {
     if (!sets) return '';
     return sets.map(s=>`${s.pair1Score}-${s.pair2Score}`).join(', ');
@@ -303,7 +288,7 @@ const MatchInfo = () => {
 
   const getMatchTooltip = (match) => {
     const setsDetail = getSetsString(match.sets);
-    const matchOrdinalText = matchOrdinal(match.matchNumberInCycle) + ' partido del ciclo';
+    const matchOrdinalText = match.matchNumberInCycle ? `${match.matchNumberInCycle}º partido del ciclo` : '';
     return `${match.winner} ganaron contra ${match.loser} (${setsDetail}) en ${match.location}. ${matchOrdinalText}.`;
   };
 
@@ -437,7 +422,6 @@ const MatchInfo = () => {
     loadData();
   };
 
-  // Función para anular el ciclo actual
   const handleCancelCurrentCycle = async () => {
     if (!currentCycle) {
       alert("No hay un ciclo activo para anular.");
@@ -451,10 +435,7 @@ const MatchInfo = () => {
     if (!confirmDelete) return;
 
     try {
-      // Eliminar el ciclo actual
       await deleteDoc(doc(db, 'cycles', currentCycle.id));
-
-      // Opcional: Eliminar resultados asociados al ciclo actual
       const associatedResults = results.filter((r) => r.cycleId === currentCycle.id);
       for (const result of associatedResults) {
         await deleteDoc(doc(db, 'results', result.id));
@@ -468,7 +449,6 @@ const MatchInfo = () => {
     }
   };
 
-  // Ciclo actual (progreso)
   let cycleProgress = null;
   if (currentCycle) {
     const cycleMatches = results.filter(m=>m.cycleId===currentCycle.id && m.winner && m.loser);
@@ -481,7 +461,6 @@ const MatchInfo = () => {
     );
   }
 
-  // Historial de ciclos
   const cycleHistory = cycles.map((c,i)=>{
     const cResults = results.filter(m=>m.cycleId===c.id && m.winner && m.loser).sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
     const cNoMatches = noMatchDays.filter(n=> dayjs(n.date,'YYYY-MM-DD').isBetween(c.startDate,c.endDate,'day','[]'));
@@ -512,12 +491,10 @@ const MatchInfo = () => {
     };
   });
 
-  // Paginación del historial de ciclos
   const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
   const endIndexCycles = startIndexCycles + cyclesPerPage;
   const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
-  // Próximo partido en el ciclo actual
   const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
   let nextMatchHour = '';
   if (dayOfWeek===1) nextMatchHour='20:00';
@@ -758,74 +735,85 @@ const MatchInfo = () => {
 
       <Box sx={{ marginTop:'30px' }}>
         <Typography variant="h6"><strong>Historial de Ciclos</strong></Typography>
-        {paginatedCycles.map(ch=>{
-          // Determinar la pareja ganadora del ciclo si result = Victoria o Derrota
-          let winnerPairCycle='';
-          if (ch.result==='Victoria') {
-            winnerPairCycle = ch.firstPair;
-          } else if (ch.result==='Derrota') {
-            winnerPairCycle = ch.secondPair;
-          }
+        {(()=>{
+          const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
+          const endIndexCycles = startIndexCycles + cyclesPerPage;
+          const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
           return (
-            <Box key={ch.cycleNumber} sx={{ mt:2 }}>
-              <Typography variant="subtitle1">
-                {(ordinalMap[ch.cycleNumber] || (ch.cycleNumber+'º'))} ciclo
-                {' '}(
-                {dayjs(ch.startDate).format('DD/MM/YYYY')}
-                {' - '}
-                {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'}
-                )
-              </Typography>
-              <Divider sx={{my:1}}/>
-              {ch.matches.map((m,i)=>(
-                <Typography variant="body2" key={m.id}>
-                  <strong>{dayjs(m.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
-                </Typography>
-              ))}
-              {ch.noMatches.map((nm)=>(
-                <Typography variant="body2" key={'nm-'+nm.id}>
-                  <strong>{dayjs(nm.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason?' (motivo: '+nm.reason+')':''}
-                </Typography>
-              ))}
-              {ch.result && (
-                <Typography variant="body2" sx={{ fontWeight:'bold', mt:1 }}>
-                  Resultado del ciclo: Ganador: <strong>{winnerPairCycle}</strong>
-                </Typography>
-              )}
+            <>
+              {paginatedCycles.map(ch=>{
+                let winnerPairCycle='';
+                if (ch.result==='Victoria') {
+                  winnerPairCycle = ch.firstPair;
+                } else if (ch.result==='Derrota') {
+                  winnerPairCycle = ch.secondPair;
+                }
 
-              {/* Si el ciclo está en curso y es el currentCycle */}
-              {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber===currentCycleNumber && nextMatchDate && (
-                <Box sx={{ mt:1 }}>
-                  <Typography variant="body2" sx={{ fontWeight:'bold' }}>Próximo partido:</Typography>
-                  <Typography variant="body2">
-                    {nextMatchPairs}
-                  </Typography>
-                  <Typography variant="body2">
-                    Fecha: {nextMatchDate.format('DD/MM/YYYY')}
-                  </Typography>
-                  {nextMatchHour && (
-                    <Typography variant="body2">
-                      Hora: {nextMatchHour}
+                const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
+                let nextMatchHour = '';
+                if (dayOfWeek===1) nextMatchHour='20:00';
+                else if (dayOfWeek===4) nextMatchHour='19:30';
+
+                return (
+                  <Box key={ch.cycleNumber} sx={{ mt:2 }}>
+                    <Typography variant="subtitle1">
+                      {ch.cycleNumber}º ciclo
+                      {' ('}
+                      {dayjs(ch.startDate).format('DD/MM/YYYY')}
+                      {' - '}
+                      {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'}
+                      {')'}
                     </Typography>
-                  )}
-                  <Typography variant="body2">
-                    Lugar: Passing Padel
-                  </Typography>
-                </Box>
+                    <Divider sx={{my:1}}/>
+                    {ch.matches.map((m,i)=>(
+                      <Typography variant="body2" key={m.id}>
+                        <strong>{dayjs(m.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
+                      </Typography>
+                    ))}
+                    {ch.noMatches.map((nm)=>(
+                      <Typography variant="body2" key={'nm-'+nm.id}>
+                        <strong>{dayjs(nm.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason?' (motivo: '+nm.reason+')':''}
+                      </Typography>
+                    ))}
+                    {ch.result && (
+                      <Typography variant="body2" sx={{ fontWeight:'bold', mt:1 }}>
+                        Resultado del ciclo: Ganador: <strong>{winnerPairCycle}</strong>
+                      </Typography>
+                    )}
+                    {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber===currentCycleNumber && nextMatchDate && (
+                      <Box sx={{ mt:1 }}>
+                        <Typography variant="body2" sx={{ fontWeight:'bold' }}>Próximo partido:</Typography>
+                        <Typography variant="body2">
+                          {nextMatchPairs}
+                        </Typography>
+                        <Typography variant="body2">
+                          Fecha: {nextMatchDate.format('DD/MM/YYYY')}
+                        </Typography>
+                        {nextMatchHour && (
+                          <Typography variant="body2">
+                            Hora: {nextMatchHour}
+                          </Typography>
+                        )}
+                        <Typography variant="body2">
+                          Lugar: Passing Padel
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
+              {cycleHistory.length > cyclesPerPage && (
+                <Pagination
+                  count={Math.ceil(cycleHistory.length / cyclesPerPage)}
+                  page={cyclesCurrentPage}
+                  onChange={(e, value) => setCyclesCurrentPage(value)}
+                  sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
+                />
               )}
-            </Box>
+            </>
           );
-        })}
-
-        {cycleHistory.length > cyclesPerPage && (
-          <Pagination
-            count={Math.ceil(cycleHistory.length / cyclesPerPage)}
-            page={cyclesCurrentPage}
-            onChange={(e, value) => setCyclesCurrentPage(value)}
-            sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
-          />
-        )}
+        })()}
       </Box>
 
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
