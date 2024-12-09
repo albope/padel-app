@@ -31,7 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase'; // Ajustar según la configuración
 
 dayjs.locale('es');
@@ -88,6 +88,10 @@ const MatchInfo = () => {
   const ordinalMap = {
     1:'Primer', 2:'Segundo', 3:'Tercer', 4:'Cuarto', 5:'Quinto'
   };
+
+  // Agregar estado para paginación del historial de ciclos
+  const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
+  const cyclesPerPage = 5; // Número de ciclos por página en el historial
 
   const loadData = async () => {
     const cyclesSnap = await getDocs(collection(db, 'cycles'));
@@ -433,6 +437,37 @@ const MatchInfo = () => {
     loadData();
   };
 
+  // Función para anular el ciclo actual
+  const handleCancelCurrentCycle = async () => {
+    if (!currentCycle) {
+      alert("No hay un ciclo activo para anular.");
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `¿Estás seguro de que deseas anular el ciclo "${currentCycle.currentPairs}"? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      // Eliminar el ciclo actual
+      await deleteDoc(doc(db, 'cycles', currentCycle.id));
+
+      // Opcional: Eliminar resultados asociados al ciclo actual
+      const associatedResults = results.filter((r) => r.cycleId === currentCycle.id);
+      for (const result of associatedResults) {
+        await deleteDoc(doc(db, 'results', result.id));
+      }
+
+      alert("El ciclo ha sido anulado exitosamente.");
+      loadData();
+    } catch (error) {
+      console.error("Error al anular el ciclo:", error);
+      alert("Ocurrió un error al intentar anular el ciclo. Por favor, inténtalo de nuevo.");
+    }
+  };
+
   // Ciclo actual (progreso)
   let cycleProgress = null;
   if (currentCycle) {
@@ -476,6 +511,11 @@ const MatchInfo = () => {
       secondPair
     };
   });
+
+  // Paginación del historial de ciclos
+  const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
+  const endIndexCycles = startIndexCycles + cyclesPerPage;
+  const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
   // Próximo partido en el ciclo actual
   const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
@@ -567,7 +607,27 @@ const MatchInfo = () => {
           <Typography variant="body1">Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong></Typography>
           <Typography variant="body1">Parejas: <strong>{nextMatchPairs}</strong></Typography>
           <Typography variant="body1">{nextMatchInfo}</Typography>
+          {currentCycle && (
+            <Typography variant="body1" sx={{ mt:1 }}>
+              Parejas en el ciclo en curso: <strong>{currentCycle.currentPairs}</strong>
+            </Typography>
+          )}
           {cycleProgress}
+          {currentCycle && (!currentCycle.endDate || dayjs(currentCycle.endDate).isAfter(dayjs())) && (
+            <Box sx={{ textAlign: 'right', mt: 2 }}>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleCancelCurrentCycle}
+                sx={{
+                  textTransform: 'none',
+                  '&:hover': { backgroundColor: '#d32f2f' },
+                }}
+              >
+                Anular ciclo actual
+              </Button>
+            </Box>
+          )}
         </Box>
       )}
 
@@ -698,7 +758,7 @@ const MatchInfo = () => {
 
       <Box sx={{ marginTop:'30px' }}>
         <Typography variant="h6"><strong>Historial de Ciclos</strong></Typography>
-        {cycleHistory.map(ch=>{
+        {paginatedCycles.map(ch=>{
           // Determinar la pareja ganadora del ciclo si result = Victoria o Derrota
           let winnerPairCycle='';
           if (ch.result==='Victoria') {
@@ -735,7 +795,7 @@ const MatchInfo = () => {
               )}
 
               {/* Si el ciclo está en curso y es el currentCycle */}
-              {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.id===currentCycle.id && nextMatchDate && (
+              {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber===currentCycleNumber && nextMatchDate && (
                 <Box sx={{ mt:1 }}>
                   <Typography variant="body2" sx={{ fontWeight:'bold' }}>Próximo partido:</Typography>
                   <Typography variant="body2">
@@ -757,6 +817,15 @@ const MatchInfo = () => {
             </Box>
           );
         })}
+
+        {cycleHistory.length > cyclesPerPage && (
+          <Pagination
+            count={Math.ceil(cycleHistory.length / cyclesPerPage)}
+            page={cyclesCurrentPage}
+            onChange={(e, value) => setCyclesCurrentPage(value)}
+            sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
+          />
+        )}
       </Box>
 
       <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
