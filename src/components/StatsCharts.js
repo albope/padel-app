@@ -41,7 +41,7 @@ import { Bar, Pie, Line } from 'react-chartjs-2';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import dayjs from 'dayjs';
-import 'dayjs/locale/es'; // Idioma español para Dayjs
+import 'dayjs/locale/es'; // Idioma español
 import 'chart.js/auto';
 import { useNavigate } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
@@ -51,7 +51,7 @@ import { saveAs } from 'file-saver';
 import html2canvas from 'html2canvas';
 import { TransitionGroup } from 'react-transition-group';
 
-dayjs.locale('es'); // Aplicar idioma español a Dayjs
+dayjs.locale('es');
 
 // Función para exportar gráficos como imagen
 const exportChartAsImage = async (chartRef, chartName) => {
@@ -115,7 +115,7 @@ const monthlyChartOptions = {
 };
 
 const StatsCharts = () => {
-  const [players, setPlayers] = useState([
+  const [players] = useState([
     { id: 'Lucas', name: 'Lucas' },
     { id: 'Bort', name: 'Bort' },
     { id: 'Martin', name: 'Martin' },
@@ -137,7 +137,7 @@ const StatsCharts = () => {
 
   const [summaryData, setSummaryData] = useState({
     totalSets: 0,
-    topPlayer: '',
+    topPlayers: [],
     topPlayerWins: 0,
   });
 
@@ -178,25 +178,18 @@ const StatsCharts = () => {
     monthlyChart: useRef(null),
   };
 
-  // Filtros en Historial (sin fecha en Historial, sin búsqueda general)
+  // Filtros en Historial
   const [searchPlayerFilter, setSearchPlayerFilter] = useState('');
   const [searchPairFilter, setSearchPairFilter] = useState('');
 
-  // Resultados del mes anterior para cálculos de mejora de eficiencia
+  // Resultados del mes anterior
   const [lastMonthResults, setLastMonthResults] = useState([]);
 
-  // Paginación en Historial
+  // Paginación Historial
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Ajuste partido más ajustado:
-  // PuntajeDeAjuste = DiferenciaTotal / NumeroDeSets
-  // Elegir el partido con el menor PuntajeDeAjuste.
-  // Si hay empate en PuntajeDeAjuste, preferir el partido con 3 sets sobre 2 sets.
-  // Si continúa el empate, mostrar todos.
-
-  // Añadir Tooltips para "Diferencia promedio de sets" y "Partido más ajustado"
-  // Creamos funciones para renderizar insights con icono si contienen esas frases
+  // Renderizar insights con tooltips especiales
   const renderInsight = (insight) => {
     let showDiffTooltip = false;
     let showAjustadoTooltip = false;
@@ -210,7 +203,7 @@ const StatsCharts = () => {
 
     return (
       <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
-        {insight}
+        <span dangerouslySetInnerHTML={{ __html: insight }}></span>
         {showDiffTooltip && (
           <IconButton
             size="small"
@@ -230,7 +223,7 @@ const StatsCharts = () => {
             onClick={(e) =>
               handlePopoverOpen(
                 e,
-                'Es el partido con la menor diferencia total de puntos entre los sets, considerando la división por el número de sets jugados (más sets = más ajustado si misma diferencia).'
+                'Es el partido con la menor diferencia total de puntos entre los sets, considerando la ponderación por el número de sets jugados.'
               )
             }
           >
@@ -242,7 +235,6 @@ const StatsCharts = () => {
   };
 
   useEffect(() => {
-    // Cargar datos del mes anterior
     const fetchLastMonth = async () => {
       const lastMonthStart = dayjs().subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
       const lastMonthEnd = dayjs().subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
@@ -281,7 +273,6 @@ const StatsCharts = () => {
       const currentMonthSnapshot = await getDocs(currentMonthQuery);
       const currentMonthResults = currentMonthSnapshot.docs.map((doc) => doc.data());
 
-      // Filtrar por jugadores seleccionados
       const filteredResults = resultsData.filter((result) =>
         [result.pair1.player1, result.pair1.player2, result.pair2.player1, result.pair2.player2].some((p) =>
           selectedPlayers.includes(p)
@@ -289,7 +280,6 @@ const StatsCharts = () => {
       );
       setMatchHistory(filteredResults);
 
-      // Calcular eficiencia y sets
       const efficiencyData = {};
       selectedPlayers.forEach((p) => {
         efficiencyData[p] = { name: p, gamesWon: 0, gamesPlayed: 0, setsWon: 0, setsLost: 0, efficiencies: [] };
@@ -298,10 +288,8 @@ const StatsCharts = () => {
       let consecutiveWinsData = {};
       let winStreakData = {};
 
-      // Contar partidos por pareja (para "Pareja más activa")
       const pairMatchesCount = {};
 
-      // Determinar partido(s) más ajustado(s) usando PuntajeDeAjuste = DiferenciaTotal/NúmeroDeSets
       let bestScore = Infinity;
       let bestMatches = [];
 
@@ -313,7 +301,6 @@ const StatsCharts = () => {
           result.pair2.player2,
         ];
 
-        // Parejas:
         const pair1Key = [result.pair1.player1, result.pair1.player2].sort().join(' & ');
         const pair2Key = [result.pair2.player1, result.pair2.player2].sort().join(' & ');
         pairMatchesCount[pair1Key] = (pairMatchesCount[pair1Key] || 0) + 1;
@@ -327,7 +314,7 @@ const StatsCharts = () => {
 
         let pair1Wins = 0;
         let pair2Wins = 0;
-        let matchDifference = 0; // Diferencia total de puntos en sets
+        let matchDifference = 0;
         const setsCount = result.sets.length;
 
         result.sets.forEach((set) => {
@@ -336,7 +323,6 @@ const StatsCharts = () => {
           if (s1 > s2) pair1Wins++;
           else if (s2 > s1) pair2Wins++;
 
-          // Sets ganados/perdidos
           [result.pair1.player1, result.pair1.player2].forEach((pl) => {
             if (selectedPlayers.includes(pl)) {
               if (s1 > s2) efficiencyData[pl].setsWon++;
@@ -375,7 +361,6 @@ const StatsCharts = () => {
           }
         });
 
-        // Racha de parejas
         const winningPairKey = [result[winningPair].player1, result[winningPair].player2].sort().join(' & ');
         if (!winStreakData[winningPairKey]) winStreakData[winningPairKey] = { currentStreak: 1, maxStreak: 1 };
         else {
@@ -388,44 +373,28 @@ const StatsCharts = () => {
         if (!winStreakData[losingPairKey]) winStreakData[losingPairKey] = { currentStreak: 0, maxStreak: 0 };
         else winStreakData[losingPairKey].currentStreak = 0;
 
-        // Calcular PuntajeDeAjuste
         const score = matchDifference / setsCount;
 
-        // Seleccionar partido más ajustado:
-        // - Menor PuntajeDeAjuste es mejor
-        // - Si hay empate en PuntajeDeAjuste, preferir el de más sets (3 sets sobre 2)
-        // Vamos a almacenar: {score, setsCount, match, difference: matchDifference}
-        // Al final elegimos el o los con mejor ranking
-
-        // Primero ver si encontramos mejor score
         if (score < bestScore) {
           bestScore = score;
           bestMatches = [{ match: result, setsCount, difference: matchDifference, score }];
         } else if (Math.abs(score - bestScore) < 0.0001) {
-          // Empate en PuntajeDeAjuste
-          // Ver si alguno tiene 3 sets
           const bestCurrentSetsCount = bestMatches[0].setsCount;
           if (setsCount > bestCurrentSetsCount) {
-            // Preferir este con más sets
             bestMatches = [{ match: result, setsCount, difference: matchDifference, score }];
           } else if (setsCount === bestCurrentSetsCount) {
-            // mismo sets count, agregamos
             bestMatches.push({ match: result, setsCount, difference: matchDifference, score });
-          } else {
-            // setsCount < bestCurrentSetsCount, entonces mantenemos los ya encontrados
-            // no hacemos nada
           }
-        } else {
-          // score > bestScore, no es mejor, ignorar
         }
       });
 
       // Preparar datos para gráficos
-
-      // Eficiencia (bar chart)
       const barChartLabels = [];
       const barChartValues = [];
       const playerColors = {};
+      let topEfficiency = 0;
+      let allPlayersEfficiency = {};
+
       Object.values(efficiencyData).forEach((p) => {
         const eff = p.gamesPlayed > 0 ? (p.gamesWon / p.gamesPlayed) * 100 : 0;
         barChartLabels.push(p.name);
@@ -433,7 +402,17 @@ const StatsCharts = () => {
         playerColors[p.name] = selectedPlayers.includes(p.name)
           ? 'rgba(75,192,192,0.6)'
           : 'rgba(192,192,192,0.6)';
+        allPlayersEfficiency[p.name] = eff;
+        if (eff > topEfficiency) {
+          topEfficiency = eff;
+        }
       });
+
+      const maxEffPlayers = Object.keys(allPlayersEfficiency).filter(pl => allPlayersEfficiency[pl] === topEfficiency);
+      let firstTopWins = 0;
+      if (maxEffPlayers.length > 0) {
+        firstTopWins = efficiencyData[maxEffPlayers[0]].gamesWon;
+      }
 
       setBarChartData({
         labels: barChartLabels,
@@ -446,7 +425,7 @@ const StatsCharts = () => {
         ],
       });
 
-      // Sets ganados/perdidos (stacked bar)
+      // Sets ganados/perdidos
       const stackedBarLabels = [];
       const setsWonData = [];
       const setsLostData = [];
@@ -474,14 +453,12 @@ const StatsCharts = () => {
         pairEfficiencyDataMap[p1].gamesPlayed++;
         pairEfficiencyDataMap[p2].gamesPlayed++;
 
-        let p1w = 0, p2w = 0;
-        res.sets.forEach((s) => {
-          const s1 = parseInt(s.pair1Score, 10);
-          const s2 = parseInt(s.pair2Score, 10);
-          if (s1 > s2) p1w++;
-          else if (s2 > s1) p2w++;
+        let p1w=0,p2w=0;
+        res.sets.forEach((s)=>{
+          const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+          if(s1>s2)p1w++;else if(s2>s1)p2w++;
         });
-        if (p1w > p2w) pairEfficiencyDataMap[p1].gamesWon++;
+        if(p1w>p2w) pairEfficiencyDataMap[p1].gamesWon++;
         else pairEfficiencyDataMap[p2].gamesWon++;
       });
 
@@ -491,7 +468,7 @@ const StatsCharts = () => {
         const pairPlayers = pairKey.split(' & ');
         if (pairPlayers.every((pl) => selectedPlayers.includes(pl))) {
           const d = pairEfficiencyDataMap[pairKey];
-          const eff = (d.gamesWon / d.gamesPlayed) * 100;
+          const eff = (d.gamesWon/d.gamesPlayed)*100;
           pairLabels.push(pairKey);
           pairEfficiencyValues.push(eff.toFixed(2));
         }
@@ -506,19 +483,17 @@ const StatsCharts = () => {
 
       // Pastel victorias parejas
       const pairingWins = {};
-      filteredResults.forEach((res) => {
-        let p1w = 0, p2w = 0;
-        res.sets.forEach((s) => {
-          const s1 = parseInt(s.pair1Score, 10);
-          const s2 = parseInt(s.pair2Score, 10);
-          if (s1 > s2) p1w++;
-          else if (s2 > s1) p2w++;
+      filteredResults.forEach((res)=>{
+        let p1w=0,p2w=0;
+        res.sets.forEach((s)=>{
+          const s1=parseInt(s.pair1Score,10), s2=parseInt(s.pair2Score,10);
+          if(s1>s2)p1w++;else if(s2>s1)p2w++;
         });
-        const wPair = p1w > p2w ? 'pair1' : 'pair2';
-        const wp = [res[wPair].player1, res[wPair].player2];
-        if (wp.every((pl) => selectedPlayers.includes(pl))) {
-          const key = wp.sort().join(' & ');
-          pairingWins[key] = (pairingWins[key] || 0) + 1;
+        const wPair=p1w>p2w?'pair1':'pair2';
+        const wp=[res[wPair].player1,res[wPair].player2];
+        if(wp.every(pl=>selectedPlayers.includes(pl))){
+          const key=wp.sort().join(' & ');
+          pairingWins[key]=(pairingWins[key]||0)+1;
         }
       });
 
@@ -526,76 +501,76 @@ const StatsCharts = () => {
       const pieChartValues = Object.values(pairingWins);
 
       setPieChartData({
-        labels: pieChartLabels,
-        datasets: [
+        labels:pieChartLabels,
+        datasets:[
           {
-            data: pieChartValues,
-            backgroundColor: pieChartLabels.map(() => `#${Math.floor(Math.random() * 16777215).toString(16)}`),
+            data:pieChartValues,
+            backgroundColor: pieChartLabels.map(()=> `#${Math.floor(Math.random()*16777215).toString(16)}`),
           },
         ],
       });
 
-      // Tendencia de eficiencia (line chart)
-      const sortedByDate = filteredResults.sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+      // Tendencia
+      const sortedByDate = filteredResults.sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
       const allDatesSetLine = new Set();
-      sortedByDate.forEach((r) => {
-        if (trendInterval === 'Día') allDatesSetLine.add(dayjs(r.date).format('YYYY-MM-DD'));
-        else if (trendInterval === 'Semana') allDatesSetLine.add(dayjs(r.date).startOf('week').format('YYYY-MM-DD'));
-        else if (trendInterval === 'Mes') allDatesSetLine.add(dayjs(r.date).startOf('month').format('YYYY-MM-DD'));
+      sortedByDate.forEach((r)=>{
+        if(trendInterval==='Día') allDatesSetLine.add(dayjs(r.date).format('YYYY-MM-DD'));
+        else if(trendInterval==='Semana') allDatesSetLine.add(dayjs(r.date).startOf('week').format('YYYY-MM-DD'));
+        else if(trendInterval==='Mes') allDatesSetLine.add(dayjs(r.date).startOf('month').format('YYYY-MM-DD'));
       });
 
-      const allDatesLine = Array.from(allDatesSetLine).sort();
-      const dateToResultsMapLine = {};
-      sortedByDate.forEach((r) => {
+      const allDatesLine=Array.from(allDatesSetLine).sort();
+      const dateToResultsMapLine={};
+      sortedByDate.forEach((r)=>{
         let dKey;
-        if (trendInterval === 'Día') dKey = dayjs(r.date).format('YYYY-MM-DD');
-        else if (trendInterval === 'Semana') dKey = dayjs(r.date).startOf('week').format('YYYY-MM-DD');
-        else dKey = dayjs(r.date).startOf('month').format('YYYY-MM-DD');
+        if(trendInterval==='Día') dKey=dayjs(r.date).format('YYYY-MM-DD');
+        else if(trendInterval==='Semana') dKey=dayjs(r.date).startOf('week').format('YYYY-MM-DD');
+        else dKey=dayjs(r.date).startOf('month').format('YYYY-MM-DD');
 
-        if (!dateToResultsMapLine[dKey]) dateToResultsMapLine[dKey] = [];
+        if(!dateToResultsMapLine[dKey])dateToResultsMapLine[dKey]=[];
         dateToResultsMapLine[dKey].push(r);
       });
 
-      const lineChartDatasets = selectedPlayers.map((pid) => ({
-        label: pid,
-        data: [],
-        borderColor: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
-        fill: false,
+      const lineChartDatasets=selectedPlayers.map((pid)=>({
+        label:pid,
+        data:[],
+        borderColor:`#${Math.floor(Math.random()*16777215).toString(16)}`,
+        fill:false,
       }));
 
-      const cumulativeStats = {};
-      selectedPlayers.forEach((pid) => {
-        cumulativeStats[pid] = { gamesWon: 0, gamesPlayed: 0, lastEfficiency: 0 };
+      const cumulativeStats={};
+      selectedPlayers.forEach((pid)=>{
+        cumulativeStats[pid]={gamesWon:0,gamesPlayed:0,lastEfficiency:0};
       });
 
-      allDatesLine.forEach((dStr) => {
-        const dResults = dateToResultsMapLine[dStr];
-        selectedPlayers.forEach((pid, idx) => {
-          let gw = 0, gp = 0;
-          dResults.forEach((rr) => {
-            const pGame = [rr.pair1.player1, rr.pair1.player2, rr.pair2.player1, rr.pair2.player2];
-            if (pGame.includes(pid)) {
+      allDatesLine.forEach((dStr)=>{
+        const dResults=dateToResultsMapLine[dStr];
+        selectedPlayers.forEach((pid,idx)=>{
+          let gw=0,gp=0;
+          dResults.forEach((rr)=>{
+            const pGame=[rr.pair1.player1,rr.pair1.player2,rr.pair2.player1,rr.pair2.player2];
+            if(pGame.includes(pid)){
               gp++;
               let p1w=0,p2w=0;
-              rr.sets.forEach((ss) => {
+              rr.sets.forEach((ss)=>{
                 const s1=parseInt(ss.pair1Score,10), s2=parseInt(ss.pair2Score,10);
                 if(s1>s2)p1w++;else if(s2>s1)p2w++;
               });
-              const wPair = p1w>p2w?'pair1':'pair2';
+              const wPair=p1w>p2w?'pair1':'pair2';
               if(rr[wPair].player1===pid||rr[wPair].player2===pid)gw++;
             }
           });
 
           cumulativeStats[pid].gamesPlayed+=gp;
           cumulativeStats[pid].gamesWon+=gw;
-          const eff = cumulativeStats[pid].gamesPlayed>0?(cumulativeStats[pid].gamesWon/cumulativeStats[pid].gamesPlayed)*100:cumulativeStats[pid].lastEfficiency;
+          const eff=cumulativeStats[pid].gamesPlayed>0?(cumulativeStats[pid].gamesWon/cumulativeStats[pid].gamesPlayed)*100:cumulativeStats[pid].lastEfficiency;
           cumulativeStats[pid].lastEfficiency=eff;
           lineChartDatasets[idx].data.push(eff.toFixed(2));
         });
       });
 
-      const formattedDates = allDatesLine.map((dStr) => {
-        if (trendInterval==='Día') return dayjs(dStr).format('DD/MM/YYYY');
+      const formattedDates=allDatesLine.map((dStr)=>{
+        if(trendInterval==='Día') return dayjs(dStr).format('DD/MM/YYYY');
         else if(trendInterval==='Semana'){
           const sw=dayjs(dStr).startOf('week').format('DD/MM/YYYY');
           const ew=dayjs(dStr).endOf('week').format('DD/MM/YYYY');
@@ -605,10 +580,10 @@ const StatsCharts = () => {
         }
       });
 
-      setLineChartData({ labels: formattedDates, datasets: lineChartDatasets });
+      setLineChartData({ labels:formattedDates, datasets:lineChartDatasets });
 
       // Partidos por mes
-      const matchesPerMonth = {};
+      const matchesPerMonth={};
       filteredResults.forEach((r)=>{
         const mk=dayjs(r.date).format('MMM YYYY');
         matchesPerMonth[mk]=(matchesPerMonth[mk]||0)+1;
@@ -620,29 +595,20 @@ const StatsCharts = () => {
         datasets:[{label:'Partidos Jugados',data:monthlyValues,backgroundColor:'rgba(153,102,255,0.6)'}]
       });
 
-      // Datos resumen
       let totalSets=0;
       filteredResults.forEach((r)=>{totalSets+=r.sets.length;});
 
-      // Hallar top efficiency
-      let topPlayer='';
-      let topEfficiency=0;
-      let topPlayerWins=0;
-      let allPlayersEfficiency={};
-      Object.values(efficiencyData).forEach((p)=>{
-        const eff=p.gamesPlayed>0?(p.gamesWon/p.gamesPlayed)*100:0;
-        allPlayersEfficiency[p.name]=eff;
-        if(eff>topEfficiency){
-          topEfficiency=eff;topPlayer=p.name;topPlayerWins=p.gamesWon;
-        }
+      // Hallar jugadores empatados en top eficiencia ya se hizo
+      // maxEffPlayers, topEfficiency ya calculados
+      // firstTopWins calculado
+
+      setSummaryData({
+        totalSets,
+        topPlayers: maxEffPlayers,
+        topPlayerWins: firstTopWins,
       });
 
-      setSummaryData({ totalSets, topPlayer, topPlayerWins });
-
-      // Insights del periodo seleccionado
-      const insightsPeriod=[];
-
-      // Jugador con más sets perdidos
+      // Calcular maxSetsLost, playersMaxSetsLost
       let maxSetsLost=0; let playersMaxSetsLost=[];
       Object.values(efficiencyData).forEach((p)=>{
         if(p.setsLost>maxSetsLost){
@@ -651,11 +617,7 @@ const StatsCharts = () => {
           playersMaxSetsLost.push(p.name);
         }
       });
-      if(playersMaxSetsLost.length>0 && maxSetsLost>0){
-        insightsPeriod.push(`Jugador(es) con más sets perdidos: ${playersMaxSetsLost.join(', ')} (${maxSetsLost} sets perdidos).`);
-      }
 
-      // Jugador con más sets ganados
       let maxSetsWon=0; let playersMaxSetsWon=[];
       Object.values(efficiencyData).forEach((p)=>{
         if(p.setsWon>maxSetsWon){
@@ -664,12 +626,8 @@ const StatsCharts = () => {
           playersMaxSetsWon.push(p.name);
         }
       });
-      if(playersMaxSetsWon.length>0 && maxSetsWon>0){
-        insightsPeriod.push(`Jugador(es) con más sets ganados: ${playersMaxSetsWon.join(', ')} (${maxSetsWon} sets ganados).`);
-      }
 
-      // Jugador con más victorias consecutivas
-      let maxStreak=0;let playersMaxStreak=[];
+      let maxStreak=0; let playersMaxStreak=[];
       Object.entries(consecutiveWinsData).forEach(([pl,st])=>{
         if(st.maxStreak>maxStreak){
           maxStreak=st.maxStreak;playersMaxStreak=[pl];
@@ -677,12 +635,8 @@ const StatsCharts = () => {
           playersMaxStreak.push(pl);
         }
       });
-      if(playersMaxStreak.length>0 && maxStreak>0){
-        insightsPeriod.push(`Jugador(es) con más victorias consecutivas: ${playersMaxStreak.join(', ')} (${maxStreak} victorias seguidas).`);
-      }
 
-      // Pareja más activa
-      let maxMatches=0;let mostActivePairs=[];
+      let maxMatches=0; let mostActivePairs=[];
       Object.entries(pairMatchesCount).forEach(([pairKey,cnt])=>{
         if(cnt>maxMatches){
           maxMatches=cnt;mostActivePairs=[pairKey];
@@ -690,52 +644,17 @@ const StatsCharts = () => {
           mostActivePairs.push(pairKey);
         }
       });
-      if(mostActivePairs.length>0 && maxMatches>0){
-        insightsPeriod.push(`Pareja(s) más activa(s): ${mostActivePairs.join(', ')} (${maxMatches} partidos jugados).`);
-      }
 
-      // Diferencia promedio de sets (para top players)
-      // Ya calculada en diffInsights, topPlayers con mayor eff
+      // diffInsights
       let diffInsights=[];
-      const maxEffPlayers=Object.keys(allPlayersEfficiency).filter(pl=>allPlayersEfficiency[pl]===topEfficiency);
       maxEffPlayers.forEach((pl)=>{
         const p=efficiencyData[pl];
         const diff=(p.setsWon-p.setsLost)/(p.gamesPlayed||1);
         const sign=diff>0?`+${diff.toFixed(1)}`:diff.toFixed(1);
         diffInsights.push(`Diferencia promedio de sets para ${pl}: ${sign}.`);
       });
-      diffInsights.forEach(d=>insightsPeriod.push(d));
 
-      // Partido más ajustado
-      // bestMatches ya calculados
-      // Elegimos los partidos con menor score, si hay varios:
-      // ya los tenemos en bestMatches
-      if(bestMatches.length>0 && bestScore<Infinity){
-        // Si hay más de uno, los mostramos todos
-        // Ya en bestMatches están con setsCount y difference
-        // Preferencia ya se aplicó en cálculo, si hay tie con sets se guardaron todos
-        bestMatches.forEach((bm)=>{
-          const m=bm.match;
-          const p1=`${m.pair1.player1} & ${m.pair1.player2}`;
-          const p2=`${m.pair2.player1} & ${m.pair2.player2}`;
-          const setsDesc=m.sets.map(s=>`${s.pair1Score}-${s.pair2Score}`).join(', ');
-          insightsPeriod.push(`Partido más ajustado: ${p1} contra ${p2} (${setsDesc}).`);
-        });
-      }
-
-      // Jugador(es) más eficiente(s):
-      if(maxEffPlayers.length>0 && topEfficiency>0){
-        insightsPeriod.push(`Jugador(es) más eficiente(s): ${maxEffPlayers.join(', ')} (${topEfficiency.toFixed(2)}%).`);
-      } else {
-        insightsPeriod.push('No hay suficientes datos para determinar el jugador más eficiente.');
-      }
-
-      setInsightsSelectedPeriod(insightsPeriod);
-
-      // Insights del mes actual
-      const insightsMonth=[];
-
-      // Eficiencia este mes vs mes anterior
+      // Eficiencia mes actual vs mes anterior
       const efficiencyThisMonth={};
       selectedPlayers.forEach((p)=>{efficiencyThisMonth[p]={gamesWon:0,gamesPlayed:0}});
 
@@ -799,13 +718,7 @@ const StatsCharts = () => {
           playersMaxImprovement.push(pl);
         }
       });
-      if(playersMaxImprovement.length>0 && maxImprovement>0){
-        insightsMonth.push(`Jugador(es) con mayor mejora en eficiencia: ${playersMaxImprovement.join(', ')} (+${maxImprovement.toFixed(2)}%)`);
-      } else {
-        insightsMonth.push('No hay mejora significativa en eficiencia respecto al mes anterior.');
-      }
 
-      // Pareja con más victorias consecutivas en el mes actual
       const currentMonthPairs={};
       currentMonthResults.forEach((r)=>{
         const p1=[r.pair1.player1,r.pair1.player2].sort().join(' & ');
@@ -842,8 +755,69 @@ const StatsCharts = () => {
           pairsMaxStreakMonth.push(pairKey);
         }
       });
-      if(pairsMaxStreakMonth.length>0&&maxPairStreakMonth>0){
-        insightsMonth.push(`Pareja(s) con más victorias consecutivas (mes actual): ${pairsMaxStreakMonth.join(', ')} (${maxPairStreakMonth} victorias seguidas).`);
+
+      // Función para poner nombres en negrita
+      const boldNames = (arr) => arr.map(n=>`<strong>${n}</strong>`).join(', ');
+
+      // Insights del período seleccionado
+      const insightsPeriod=[];
+
+      if(playersMaxSetsLost.length>0 && maxSetsLost>0){
+        insightsPeriod.push(`Jugador(es) con más sets perdidos: ${boldNames(playersMaxSetsLost)} (${maxSetsLost} sets perdidos).`);
+      }
+
+      if(playersMaxSetsWon.length>0 && maxSetsWon>0){
+        insightsPeriod.push(`Jugador(es) con más sets ganados: ${boldNames(playersMaxSetsWon)} (${maxSetsWon} sets ganados).`);
+      }
+
+      if(playersMaxStreak.length>0 && maxStreak>0){
+        insightsPeriod.push(`Jugador(es) con más victorias consecutivas: ${boldNames(playersMaxStreak)} (${maxStreak} victorias seguidas).`);
+      }
+
+      if(mostActivePairs.length>0 && maxMatches>0){
+        insightsPeriod.push(`Pareja(s) más activa(s): ${boldNames(mostActivePairs)} (${maxMatches} partidos jugados).`);
+      }
+
+      diffInsights.forEach(d=>{
+        const match = d.match(/para (.+?):/);
+        if(match && match[1]){
+          const plName=match[1];
+          const boldD = d.replace(plName, `<strong>${plName}</strong>`);
+          insightsPeriod.push(boldD);
+        } else {
+          insightsPeriod.push(d);
+        }
+      });
+
+      if(bestMatches.length>0 && bestScore<Infinity){
+        bestMatches.forEach((bm)=>{
+          const m=bm.match;
+          const p1=`${m.pair1.player1} & ${m.pair1.player2}`;
+          const p2=`${m.pair2.player1} & ${m.pair2.player2}`;
+          const setsDesc=m.sets.map(s=>`${s.pair1Score}-${s.pair2Score}`).join(', ');
+          insightsPeriod.push(`Partido más ajustado: <strong>${p1}</strong> contra <strong>${p2}</strong> (${setsDesc}).`);
+        });
+      }
+
+      if(maxEffPlayers.length>0 && topEfficiency>0){
+        insightsPeriod.push(`Jugador(es) más eficiente(s): ${boldNames(maxEffPlayers)} (${topEfficiency.toFixed(2)}%).`);
+      } else {
+        insightsPeriod.push('No hay suficientes datos para determinar el jugador más eficiente.');
+      }
+
+      setInsightsSelectedPeriod(insightsPeriod);
+
+      // Insights del mes actual
+      const insightsMonth=[];
+
+      if(playersMaxImprovement.length>0 && maxImprovement>0){
+        insightsMonth.push(`Jugador(es) con mayor mejora en eficiencia: ${boldNames(playersMaxImprovement)} (+${maxImprovement.toFixed(2)}%)`);
+      } else {
+        insightsMonth.push('No hay mejora significativa en eficiencia respecto al mes anterior.');
+      }
+
+      if(pairsMaxStreakMonth.length>0 && maxPairStreakMonth>0){
+        insightsMonth.push(`Pareja(s) con más victorias consecutivas (mes actual): ${boldNames(pairsMaxStreakMonth)} (${maxPairStreakMonth} victorias seguidas).`);
       }
 
       setInsightsCurrentMonth(insightsMonth);
@@ -864,11 +838,6 @@ const StatsCharts = () => {
   const handleTabChange = (event, newValue) => {
     setTabIndex(newValue);
   };
-
-  // Filtrado avanzado en Historial:
-  // Sin date pickers en historial (quitados)
-  // Sin búsqueda general, solo por jugador y pareja
-  // Paginación en historial
 
   const filteredMatchHistory = matchHistory.filter((match) => {
     let passPlayer=true;
@@ -983,7 +952,7 @@ const StatsCharts = () => {
                       <InfoIcon fontSize="small" />
                     </IconButton>
                   </Typography>
-                  <Typography variant="h4">{summaryData.topPlayer}</Typography>
+                  <Typography variant="h4" component="div" dangerouslySetInnerHTML={{__html: summaryData.topPlayers.map(p=>`<strong>${p}</strong>`).join(', ')}} />
                 </Box>
               </Grid>
               <Grid item xs={12} sm={6} md={4}>
@@ -993,7 +962,7 @@ const StatsCharts = () => {
                     <IconButton
                       size="small"
                       onClick={(e)=>
-                        handlePopoverOpen(e,`Cantidad de partidos ganados por el jugador con el mejor rendimiento: ${summaryData.topPlayer}.`)
+                        handlePopoverOpen(e,`Cantidad de partidos ganados por el/los jugador(es) con el mejor rendimiento: ${summaryData.topPlayers.join(', ')}.`)
                       }
                     >
                       <InfoIcon fontSize="small" />
@@ -1036,7 +1005,7 @@ const StatsCharts = () => {
       {tabIndex === 1 && (
         <Fade in timeout={500}>
           <Box sx={{ marginTop:'20px' }}>
-            {/* Filtros en pestaña Gráficos */}
+            {/* Filtros en pestaña Gráficos con solo mes-año */}
             <Box sx={{ marginBottom:'20px' }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={12} sm={6} md={4}>
@@ -1065,7 +1034,8 @@ const StatsCharts = () => {
                     value={startDate}
                     onChange={(date)=>setStartDate(date)}
                     renderInput={(params)=><TextField {...params} fullWidth/>}
-                    inputFormat="DD/MM/YYYY"
+                    views={['year','month']}
+                    inputFormat="MM/YYYY"
                   />
                 </Grid>
                 <Grid item xs={6} sm={3} md={2}>
@@ -1074,7 +1044,8 @@ const StatsCharts = () => {
                     value={endDate}
                     onChange={(date)=>setEndDate(date)}
                     renderInput={(params)=><TextField {...params} fullWidth/>}
-                    inputFormat="DD/MM/YYYY"
+                    views={['year','month']}
+                    inputFormat="MM/YYYY"
                   />
                 </Grid>
               </Grid>
@@ -1083,22 +1054,6 @@ const StatsCharts = () => {
             <Typography variant="subtitle2" color="textSecondary" gutterBottom>
               Rango activo: {startDate.format('DD/MM/YYYY')} - {endDate.format('DD/MM/YYYY')}
             </Typography>
-
-            {/* Intervalo de Tendencia sobre el gráfico de tendencia */}
-            <FormControl fullWidth sx={{ marginBottom: '10px' }}>
-              <InputLabel id="trend-interval-label">Intervalo de Tendencia</InputLabel>
-              <Select
-                labelId="trend-interval-label"
-                id="trend-interval-select"
-                value={trendInterval}
-                onChange={handleTrendIntervalChange}
-                label="Intervalo de Tendencia"
-              >
-                <MenuItem value="Día">Día</MenuItem>
-                <MenuItem value="Semana">Semana</MenuItem>
-                <MenuItem value="Mes">Mes</MenuItem>
-              </Select>
-            </FormControl>
 
             <Grid container spacing={4}>
               <Grid item xs={12}>
@@ -1159,7 +1114,22 @@ const StatsCharts = () => {
                 </Tooltip>
               </Grid>
 
+              {/* Intervalo de Tendencia justo antes del gráfico de Tendencia de Eficiencia */}
               <Grid item xs={12}>
+                <FormControl fullWidth sx={{ marginBottom: '10px' }}>
+                  <InputLabel id="trend-interval-label">Intervalo de Tendencia</InputLabel>
+                  <Select
+                    labelId="trend-interval-label"
+                    id="trend-interval-select"
+                    value={trendInterval}
+                    onChange={handleTrendIntervalChange}
+                    label="Intervalo de Tendencia"
+                  >
+                    <MenuItem value="Día">Día</MenuItem>
+                    <MenuItem value="Semana">Semana</MenuItem>
+                    <MenuItem value="Mes">Mes</MenuItem>
+                  </Select>
+                </FormControl>
                 <Typography variant="h6" gutterBottom>
                   Tendencia de Eficiencia Acumulada
                   <IconButton
@@ -1282,7 +1252,7 @@ const StatsCharts = () => {
       {tabIndex === 2 && (
         <Fade in timeout={500}>
           <Box sx={{ marginTop: '20px' }}>
-            {/* Filtros en Historial (sin date pickers ni búsqueda general) */}
+            {/* Filtros en Historial */}
             <Box sx={{ marginBottom:'20px' }}>
               <Grid container spacing={2} alignItems="center">
                 <Grid item xs={6} sm={3} md={2}>
@@ -1326,7 +1296,6 @@ const StatsCharts = () => {
               Historial de Partidos
             </Typography>
 
-            {/* Lista paginada */}
             <TableContainer component={Paper}>
               <Table size="small">
                 <TableHead>
@@ -1338,8 +1307,9 @@ const StatsCharts = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {paginatedHistory
+                  {filteredMatchHistory
                     .sort((a,b)=>dayjs(b.date).diff(dayjs(a.date)))
+                    .slice((currentPage-1)*itemsPerPage, (currentPage-1)*itemsPerPage+itemsPerPage)
                     .map((match,index)=>{
                       let p1Wins=0,p2Wins=0;
                       match.sets.forEach(s=>{
@@ -1371,7 +1341,6 @@ const StatsCharts = () => {
                 />
               </Box>
             )}
-
           </Box>
         </Fade>
       )}
