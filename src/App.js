@@ -7,8 +7,8 @@ import ResultForm from './components/ResultForm';
 import MatchInfo from './components/MatchInfo';
 import Players from './components/Players';
 import Insignias from './components/Insignias';
-import ScrollToTop from './components/ScrollToTop'; // Importa el componente
-import StatsCharts from './components/StatsCharts'; // Importa el nuevo componente
+import ScrollToTop from './components/ScrollToTop';
+import StatsCharts from './components/StatsCharts';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 
@@ -26,13 +26,13 @@ const App = () => {
               <Route path="/info" element={<MatchInfo />} />
               <Route path="/players" element={<Players />} />
               <Route path="/insignias" element={<Insignias />} />
-              <Route path="/stats-charts" element={<StatsCharts />} /> {/* Añadir esta ruta */}
+              <Route path="/stats-charts" element={<StatsCharts />} />
             </Routes>
           </div>
 
           {/* Footer común para todas las páginas */}
           <footer style={{ textAlign: 'center', padding: '20px 0', backgroundColor: '#f1f1f1', color: '#333', fontSize: '14px', marginTop: '30px' }}>
-            © <strong>2024</strong> Made by Alberto Bort
+            © <strong>2024</strong> Made with <span style={{ fontSize: '16px' }}>❤️</span> by Alberto Bort
           </footer>
         </div>
       </Router>

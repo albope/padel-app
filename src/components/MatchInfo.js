@@ -263,11 +263,6 @@ const MatchInfo = () => {
     loadData();
   }, []);
 
-  const handleDayClick = (day) => {
-    setSelectedDay(day);
-    setModalOpen(true);
-  };
-
   const handleNoMatchSave = async () => {
     if (!selectedDay) return;
     const dateStr = selectedDay.format('YYYY-MM-DD');
@@ -318,6 +313,25 @@ const MatchInfo = () => {
     const setsDetail = getSetsString(match.sets);
     const matchOrdinalText = match.matchNumberInCycle ? `${match.matchNumberInCycle}º partido del ciclo` : '';
     return `${match.winner} ganaron contra ${match.loser} (${setsDetail}) en ${match.location}. ${matchOrdinalText}.`;
+  };
+
+  // Ahora el tooltip contendrá un botón para marcar el día sin partido
+  const renderTooltipContent = (ds, d) => {
+    return (
+      <Box>
+        <Typography variant="body2">{ds.tooltip}</Typography>
+        <Button
+          variant="text"
+          sx={{ mt: 1, textTransform:'none' }}
+          onClick={() => {
+            setSelectedDay(d);
+            setModalOpen(true);
+          }}
+        >
+          Marcar día sin partido
+        </Button>
+      </Box>
+    );
   };
 
   const getDayStyle = (d) => {
@@ -380,15 +394,14 @@ const MatchInfo = () => {
         cellSx.backgroundColor = 'white';
     }
 
-    // Agregamos enterTouchDelay y leaveTouchDelay para mostrar en móviles.
     return (
       <Tooltip
         key={d.format()}
-        title={ds.tooltip}
+        title={renderTooltipContent(ds, d)}
         enterTouchDelay={50}
         leaveTouchDelay={3000}
       >
-        <TableCell align="center" sx={cellSx} onClick={() => handleDayClick(d)}>
+        <TableCell align="center" sx={cellSx}>
           {dayNumber}
           {cellContent}
         </TableCell>
@@ -698,15 +711,24 @@ const MatchInfo = () => {
         </Box>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
-        <Button variant="outlined" onClick={handlePrevMonth}>Mes Anterior</Button>
-        <Typography variant="body1">{dayjs().year(viewYear).month(viewMonth).format('MMMM YYYY')}</Typography>
-        <Button variant="outlined" onClick={handleNextMonth}>Mes Siguiente</Button>
-      </Box>
+      {/* Ajuste del diseño para el mes/año y botones de navegación usando Grid */}
+      <Grid container spacing={2} alignItems="center" justifyContent="center" sx={{ mt: 4 }}>
+        <Grid item xs={4} sm={3} md={2}>
+          <Button variant="outlined" fullWidth onClick={handlePrevMonth}>Mes Anterior</Button>
+        </Grid>
+        <Grid item xs={4} sm={6} md={4} sx={{ textAlign:'center' }}>
+          <Typography variant="body1" sx={{ fontWeight:'bold' }}>
+            {dayjs().year(viewYear).month(viewMonth).format('MMMM YYYY')}
+          </Typography>
+        </Grid>
+        <Grid item xs={4} sm={3} md={2}>
+          <Button variant="outlined" fullWidth onClick={handleNextMonth}>Mes Siguiente</Button>
+        </Grid>
+      </Grid>
 
       <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Calendario</strong></Typography>
-        <Typography variant="body2">Haz clic en un día para marcar "Día sin partido".</Typography>
+        <Typography variant="body2">Toca un día para mostrar opciones. Luego pulsa "Marcar día sin partido" en el tooltip.</Typography>
         <Box sx={{ marginTop: '10px', overflowX: 'auto' }}>
           <TableContainer component={Paper}>
             <TableBody>
