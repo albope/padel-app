@@ -82,11 +82,91 @@ const MatchInfo = () => {
   const [pair2Player1, setPair2Player1] = useState('');
   const [pair2Player2, setPair2Player2] = useState('');
 
+  const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
+  const cyclesPerPage = 5;
+
+  // Agregar los estados para minDate y maxDate
   const [minDate, setMinDate] = useState(null);
   const [maxDate, setMaxDate] = useState(null);
 
-  const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
-  const cyclesPerPage = 5;
+  const recalculateCycleForResults = (loadedCycles, loadedResults) => {
+    for (const r of loadedResults) {
+      r.cycleId = null;
+      const resultDate = dayjs(r.date);
+      for (const c of loadedCycles) {
+        const start = dayjs(c.startDate);
+        const end = c.endDate ? dayjs(c.endDate) : null;
+        if (end) {
+          if ((resultDate.isSame(start,'day')||resultDate.isAfter(start)) &&
+              (resultDate.isBefore(end,'day')||resultDate.isSame(end,'day'))) {
+            r.cycleId = c.id;
+            break;
+          }
+        } else {
+          if (resultDate.isSame(start,'day')||resultDate.isAfter(start)) {
+            r.cycleId = c.id;
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  const recalculateMatchNumbers = (loadedCycles, loadedResults) => {
+    for (const c of loadedCycles) {
+      const cycleMatches = loadedResults.filter(m=>m.cycleId===c.id && m.winner && m.loser)
+        .sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
+      cycleMatches.forEach((m,i)=>{
+        m.matchNumberInCycle = i+1;
+      });
+    }
+  };
+
+  const updateNextMatch = (current, loadedCycles, loadedResults, loadedNoMatch) => {
+    const cycleResults = loadedResults.filter(m => m.cycleId===current.id && m.winner && m.loser);
+    let lastMatchDate = null;
+    cycleResults.forEach(m => {
+      const d = dayjs(m.date, 'YYYY-MM-DD');
+      if (!lastMatchDate || d.isAfter(lastMatchDate)) {
+        lastMatchDate = d;
+      }
+    });
+
+    let nextDate = current.startDate ? dayjs(current.startDate) : dayjs();
+    if (lastMatchDate) {
+      let nextPossible = lastMatchDate;
+      for (let i = 1; i <= 60; i++) {
+        nextPossible = nextPossible.add(1, 'day');
+        const dow = nextPossible.day();
+        if (dow === 1 || dow === 4) {
+          const nm = loadedNoMatch.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(nextPossible, 'day'));
+          if (!nm) {
+            nextDate = nextPossible;
+            break;
+          }
+        }
+      }
+    }
+
+    setNextMatchDate(nextDate);
+    const pairs = current && current.currentPairs ? current.currentPairs : "Martin & Bort vs Lucas & Ricardo";
+    setNextMatchPairs(pairs);
+
+    const recentNoMatch = loadedNoMatch.filter(n => dayjs(n.date, 'YYYY-MM-DD').isBefore(nextDate));
+    if (recentNoMatch.length > 0) {
+      const lastNoMatch = recentNoMatch.sort((a,b)=>dayjs(b.date).diff(dayjs(a.date)))[0];
+      const reasonText = lastNoMatch.reason ? ` (motivo: ${lastNoMatch.reason})` : '';
+      setPreviousNoMatchMessage(`El partido del ${dayjs(lastNoMatch.date).format('DD/MM')} no se jugó${reasonText}. Próximo partido: ${nextDate.format('DD/MM/YYYY')}`);
+    } else {
+      setPreviousNoMatchMessage('');
+    }
+  };
+
+  const calculateCycleProgress = (current, loadedResults) => {
+    if (!current) return 0;
+    const cycleMatches = loadedResults.filter(m=>m.cycleId===current.id && m.winner && m.loser);
+    return cycleMatches.length;
+  };
 
   const loadData = async () => {
     const cyclesSnap = await getDocs(collection(db, 'cycles'));
@@ -96,12 +176,6 @@ const MatchInfo = () => {
     });
     loadedCycles.sort((a, b) => dayjs(a.startDate).diff(dayjs(b.startDate)));
     setCycles(loadedCycles);
-
-    if (loadedCycles.length>0) {
-      setMinDate(dayjs(loadedCycles[0].startDate));
-      const lastC = loadedCycles[loadedCycles.length-1];
-      setMaxDate(lastC.endDate?dayjs(lastC.endDate):dayjs());
-    }
 
     const now = dayjs();
     let current = null;
@@ -152,82 +226,37 @@ const MatchInfo = () => {
         winner=pair2Name; loser=pair1Name;
       }
 
-      const date = r.date;
-      let cycleId=null;
-      for (const c of loadedCycles) {
-        if ((dayjs(date).isSame(c.startDate,'day')||dayjs(date).isAfter(c.startDate)) &&
-            c.endDate && (dayjs(date).isBefore(c.endDate,'day')||dayjs(date).isSame(c.endDate,'day'))) {
-          cycleId = c.id;
-          break;
-        }
-      }
-
       loadedResults.push({
         id: docu.id,
         ...r,
         winner,
         loser,
-        cycleId
       });
     });
 
+    // Asociar resultados a sus ciclos
+    recalculateCycleForResults(loadedCycles, loadedResults);
+
+    // Recalcular matchNumberInCycle
+    recalculateMatchNumbers(loadedCycles, loadedResults);
+
     setResults(loadedResults);
 
-    for (const c of loadedCycles) {
-      const cycleMatches = loadedResults.filter(m=>m.cycleId===c.id && m.winner && m.loser).sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
-      cycleMatches.forEach((m,i)=>{
-        m.matchNumberInCycle = i+1;
-      });
-    }
-
-    setResults([...loadedResults]);
-
     if (current) {
-      const cycleResults = loadedResults.filter(m => m.cycleId===current.id && m.winner && m.loser);
-      let lastMatchDate = null;
-      cycleResults.forEach(m => {
-        const d = dayjs(m.date, 'YYYY-MM-DD');
-        if (!lastMatchDate || d.isAfter(lastMatchDate)) {
-          lastMatchDate = d;
-        }
-      });
-
-      let nextDate = current.startDate ? dayjs(current.startDate) : dayjs();
-      if (lastMatchDate && lastMatchDate.isAfter(dayjs())) {
-        let nextPossible = lastMatchDate;
-        for (let i = 1; i <= 60; i++) {
-          nextPossible = nextPossible.add(1, 'day');
-          const dow = nextPossible.day();
-          if (dow === 1 || dow === 4) {
-            const nm = loadedNoMatch.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(nextPossible, 'day'));
-            if (!nm) {
-              nextDate = nextPossible;
-              break;
-            }
-          }
-        }
-      }
-
-      setNextMatchDate(nextDate);
-      const pairs = current && current.currentPairs ? current.currentPairs : "Martin & Bort vs Lucas & Ricardo";
-      setNextMatchPairs(pairs);
-
-      const recentNoMatch = loadedNoMatch.filter(n => dayjs(n.date, 'YYYY-MM-DD').isBefore(nextDate));
-      if (recentNoMatch.length > 0) {
-        const lastNoMatch = recentNoMatch.sort((a,b)=>dayjs(b.date).diff(dayjs(a.date)))[0];
-        const reasonText = lastNoMatch.reason ? ` (motivo: ${lastNoMatch.reason})` : '';
-        setPreviousNoMatchMessage(`El partido del ${dayjs(lastNoMatch.date).format('DD/MM')} no se jugó${reasonText}. Próximo partido: ${nextDate.format('DD/MM/YYYY')}`);
-      } else {
-        setPreviousNoMatchMessage('');
-      }
-
-      // Actualizar el texto del ciclo disputado con la cantidad de ciclos cargados
+      updateNextMatch(current, loadedCycles, loadedResults, loadedNoMatch);
       setNextMatchInfo(`${loadedCycles.length}º ciclo disputado`);
     } else {
       setNextMatchInfo('');
       setNextMatchDate(null);
       setNextMatchPairs('');
       setPreviousNoMatchMessage('');
+    }
+
+    if (loadedCycles.length>0) {
+      const firstC = loadedCycles[0];
+      const lastC = loadedCycles[loadedCycles.length-1];
+      setMinDate(dayjs(firstC.startDate));
+      setMaxDate(lastC.endDate?dayjs(lastC.endDate):dayjs());
     }
   };
 
@@ -298,7 +327,7 @@ const MatchInfo = () => {
       return { type:'noMatch', tooltip: `Día sin partido${nm.reason ? ' (motivo: '+nm.reason+')' : ''}` };
     }
 
-    const dayResult = results.filter(m=>m.date===d.format('YYYY-MM-DD') && m.winner && m.loser);
+    const dayResult = results.filter(m=> m.date===d.format('YYYY-MM-DD') && m.winner && m.loser);
     if (dayResult && dayResult.length>0) {
       const match = dayResult[0];
       const tooltip = getMatchTooltip(match);
@@ -451,8 +480,7 @@ const MatchInfo = () => {
 
   let cycleProgress = null;
   if (currentCycle) {
-    const cycleMatches = results.filter(m=>m.cycleId===currentCycle.id && m.winner && m.loser);
-    const played = cycleMatches.length;
+    const played = calculateCycleProgress(currentCycle, results);
     cycleProgress = (
       <Box sx={{ mt:2 }}>
         <Typography variant="body2">Progreso del ciclo: {played} de 3 partidos jugados</Typography>
@@ -463,7 +491,16 @@ const MatchInfo = () => {
 
   const cycleHistory = cycles.map((c,i)=>{
     const cResults = results.filter(m=>m.cycleId===c.id && m.winner && m.loser).sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
-    const cNoMatches = noMatchDays.filter(n=> dayjs(n.date,'YYYY-MM-DD').isBetween(c.startDate,c.endDate,'day','[]'));
+    const cNoMatches = noMatchDays.filter(n=> {
+      const start = dayjs(c.startDate);
+      const end = c.endDate ? dayjs(c.endDate) : null;
+      const nmDate = dayjs(n.date,'YYYY-MM-DD');
+      if (end) {
+        return (nmDate.isAfter(start) || nmDate.isSame(start,'day')) && (nmDate.isBefore(end,'day')||nmDate.isSame(end,'day'));
+      } else {
+        return nmDate.isAfter(start) || nmDate.isSame(start,'day');
+      }
+    });
     let cycleResult = '';
     const pairs = c.currentPairs ? c.currentPairs.split('vs').map(x=>x.trim()) : [];
     const firstPair = pairs[0];
@@ -496,9 +533,9 @@ const MatchInfo = () => {
   const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
   const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
-  let nextMatchHour = '';
-  if (dayOfWeek===1) nextMatchHour='20:00';
-  else if (dayOfWeek===4) nextMatchHour='19:30';
+  let matchHour = '';
+  if (dayOfWeek===1) matchHour='20:00';
+  else if (dayOfWeek===4) matchHour='19:30';
 
   return (
     <Container>
@@ -740,6 +777,11 @@ const MatchInfo = () => {
           const endIndexCycles = startIndexCycles + cyclesPerPage;
           const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
+          const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
+          let nextMatchHour = '';
+          if (dayOfWeek===1) nextMatchHour='20:00';
+          else if (dayOfWeek===4) nextMatchHour='19:30';
+
           return (
             <>
               {paginatedCycles.map(ch=>{
@@ -750,10 +792,7 @@ const MatchInfo = () => {
                   winnerPairCycle = ch.secondPair;
                 }
 
-                const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
-                let nextMatchHour = '';
-                if (dayOfWeek===1) nextMatchHour='20:00';
-                else if (dayOfWeek===4) nextMatchHour='19:30';
+                const lastMatch = ch.matches.length > 0 ? ch.matches[ch.matches.length-1] : null;
 
                 return (
                   <Box key={ch.cycleNumber} sx={{ mt:2 }}>
@@ -771,7 +810,7 @@ const MatchInfo = () => {
                         <strong>{dayjs(m.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
                       </Typography>
                     ))}
-                    {ch.noMatches.map((nm)=>(
+                    {ch.noMatches.map((nm)=>( 
                       <Typography variant="body2" key={'nm-'+nm.id}>
                         <strong>{dayjs(nm.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason?' (motivo: '+nm.reason+')':''}
                       </Typography>
@@ -783,6 +822,11 @@ const MatchInfo = () => {
                     )}
                     {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber===currentCycleNumber && nextMatchDate && (
                       <Box sx={{ mt:1 }}>
+                        {lastMatch && (
+                          <Typography variant="body2" sx={{ fontWeight:'bold', mb:1 }}>
+                            Último resultado del ciclo: {lastMatch.winner} ganaron contra {lastMatch.loser} el {dayjs(lastMatch.date,'YYYY-MM-DD').format('DD/MM/YYYY')}
+                          </Typography>
+                        )}
                         <Typography variant="body2" sx={{ fontWeight:'bold' }}>Próximo partido:</Typography>
                         <Typography variant="body2">
                           {nextMatchPairs}
