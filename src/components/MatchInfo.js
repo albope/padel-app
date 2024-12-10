@@ -48,7 +48,7 @@ const styleModal = {
   position: 'relative'
 };
 
-const availablePlayers = ['Lucas','Bort','Martin','Ricardo'];
+const availablePlayers = ['Lucas', 'Bort', 'Martin', 'Ricardo'];
 
 const MatchInfo = () => {
   const navigate = useNavigate();
@@ -85,7 +85,6 @@ const MatchInfo = () => {
   const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
   const cyclesPerPage = 5;
 
-  // Agregar los estados para minDate y maxDate
   const [minDate, setMinDate] = useState(null);
   const [maxDate, setMaxDate] = useState(null);
 
@@ -97,13 +96,13 @@ const MatchInfo = () => {
         const start = dayjs(c.startDate);
         const end = c.endDate ? dayjs(c.endDate) : null;
         if (end) {
-          if ((resultDate.isSame(start,'day')||resultDate.isAfter(start)) &&
-              (resultDate.isBefore(end,'day')||resultDate.isSame(end,'day'))) {
+          if ((resultDate.isSame(start, 'day') || resultDate.isAfter(start)) &&
+            (resultDate.isBefore(end, 'day') || resultDate.isSame(end, 'day'))) {
             r.cycleId = c.id;
             break;
           }
         } else {
-          if (resultDate.isSame(start,'day')||resultDate.isAfter(start)) {
+          if (resultDate.isSame(start, 'day') || resultDate.isAfter(start)) {
             r.cycleId = c.id;
             break;
           }
@@ -114,16 +113,16 @@ const MatchInfo = () => {
 
   const recalculateMatchNumbers = (loadedCycles, loadedResults) => {
     for (const c of loadedCycles) {
-      const cycleMatches = loadedResults.filter(m=>m.cycleId===c.id && m.winner && m.loser)
-        .sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
-      cycleMatches.forEach((m,i)=>{
-        m.matchNumberInCycle = i+1;
+      const cycleMatches = loadedResults.filter(m => m.cycleId === c.id && m.winner && m.loser)
+        .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+      cycleMatches.forEach((m, i) => {
+        m.matchNumberInCycle = i + 1;
       });
     }
   };
 
   const updateNextMatch = (current, loadedCycles, loadedResults, loadedNoMatch) => {
-    const cycleResults = loadedResults.filter(m => m.cycleId===current.id && m.winner && m.loser);
+    const cycleResults = loadedResults.filter(m => m.cycleId === current.id && m.winner && m.loser);
     let lastMatchDate = null;
     cycleResults.forEach(m => {
       const d = dayjs(m.date, 'YYYY-MM-DD');
@@ -154,7 +153,7 @@ const MatchInfo = () => {
 
     const recentNoMatch = loadedNoMatch.filter(n => dayjs(n.date, 'YYYY-MM-DD').isBefore(nextDate));
     if (recentNoMatch.length > 0) {
-      const lastNoMatch = recentNoMatch.sort((a,b)=>dayjs(b.date).diff(dayjs(a.date)))[0];
+      const lastNoMatch = recentNoMatch.sort((a, b) => dayjs(b.date).diff(dayjs(a.date)))[0];
       const reasonText = lastNoMatch.reason ? ` (motivo: ${lastNoMatch.reason})` : '';
       setPreviousNoMatchMessage(`El partido del ${dayjs(lastNoMatch.date).format('DD/MM')} no se jugó${reasonText}. Próximo partido: ${nextDate.format('DD/MM/YYYY')}`);
     } else {
@@ -164,7 +163,7 @@ const MatchInfo = () => {
 
   const calculateCycleProgress = (current, loadedResults) => {
     if (!current) return 0;
-    const cycleMatches = loadedResults.filter(m=>m.cycleId===current.id && m.winner && m.loser);
+    const cycleMatches = loadedResults.filter(m => m.cycleId === current.id && m.winner && m.loser);
     return cycleMatches.length;
   };
 
@@ -206,12 +205,12 @@ const MatchInfo = () => {
     let loadedResults = [];
     resultsSnap.forEach(docu => {
       const r = docu.data();
-      let pair1SetsWon=0;
-      let pair2SetsWon=0;
-      if (r.sets && r.sets.length>0) {
-        r.sets.forEach(s=>{
-          const p1Score = parseInt(s.pair1Score,10);
-          const p2Score = parseInt(s.pair2Score,10);
+      let pair1SetsWon = 0;
+      let pair2SetsWon = 0;
+      if (r.sets && r.sets.length > 0) {
+        r.sets.forEach(s => {
+          const p1Score = parseInt(s.pair1Score, 10);
+          const p2Score = parseInt(s.pair2Score, 10);
           if (p1Score > p2Score) pair1SetsWon++;
           else if (p2Score > p1Score) pair2SetsWon++;
         });
@@ -219,11 +218,11 @@ const MatchInfo = () => {
 
       const pair1Name = `${r.pair1.player1} & ${r.pair1.player2}`;
       const pair2Name = `${r.pair2.player1} & ${r.pair2.player2}`;
-      let winner='', loser='';
-      if (pair1SetsWon>pair2SetsWon) {
-        winner=pair1Name; loser=pair2Name;
-      } else if (pair2SetsWon>pair1SetsWon) {
-        winner=pair2Name; loser=pair1Name;
+      let winner = '', loser = '';
+      if (pair1SetsWon > pair2SetsWon) {
+        winner = pair1Name; loser = pair2Name;
+      } else if (pair2SetsWon > pair1SetsWon) {
+        winner = pair2Name; loser = pair1Name;
       }
 
       loadedResults.push({
@@ -252,11 +251,11 @@ const MatchInfo = () => {
       setPreviousNoMatchMessage('');
     }
 
-    if (loadedCycles.length>0) {
+    if (loadedCycles.length > 0) {
       const firstC = loadedCycles[0];
-      const lastC = loadedCycles[loadedCycles.length-1];
+      const lastC = loadedCycles[loadedCycles.length - 1];
       setMinDate(dayjs(firstC.startDate));
-      setMaxDate(lastC.endDate?dayjs(lastC.endDate):dayjs());
+      setMaxDate(lastC.endDate ? dayjs(lastC.endDate) : dayjs());
     }
   };
 
@@ -306,13 +305,13 @@ const MatchInfo = () => {
   };
 
   const getInitials = (pairName) => {
-    const names = pairName.split('&').map(s=>s.trim());
-    return names.map(n=>n.charAt(0)).join('&');
+    const names = pairName.split('&').map(s => s.trim());
+    return names.map(n => n.charAt(0)).join('&');
   };
 
   const getSetsString = (sets) => {
     if (!sets) return '';
-    return sets.map(s=>`${s.pair1Score}-${s.pair2Score}`).join(', ');
+    return sets.map(s => `${s.pair1Score}-${s.pair2Score}`).join(', ');
   };
 
   const getMatchTooltip = (match) => {
@@ -322,68 +321,74 @@ const MatchInfo = () => {
   };
 
   const getDayStyle = (d) => {
-    const nm = noMatchDays.find(n=> dayjs(n.date,'YYYY-MM-DD').isSame(d,'day'));
+    const nm = noMatchDays.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(d, 'day'));
     if (nm) {
-      return { type:'noMatch', tooltip: `Día sin partido${nm.reason ? ' (motivo: '+nm.reason+')' : ''}` };
+      return { type: 'noMatch', tooltip: `Día sin partido${nm.reason ? ' (motivo: ' + nm.reason + ')' : ''}` };
     }
 
-    const dayResult = results.filter(m=> m.date===d.format('YYYY-MM-DD') && m.winner && m.loser);
-    if (dayResult && dayResult.length>0) {
+    const dayResult = results.filter(m => m.date === d.format('YYYY-MM-DD') && m.winner && m.loser);
+    if (dayResult && dayResult.length > 0) {
       const match = dayResult[0];
       const tooltip = getMatchTooltip(match);
-      return { type:'played', winner: match.winner, loser: match.loser, tooltip };
+      return { type: 'played', winner: match.winner, loser: match.loser, tooltip };
     }
 
     const dow = d.day();
-    if (dow===1 || dow===4) {
-      return { type:'scheduled', tooltip:'Partido programado' };
+    if (dow === 1 || dow === 4) {
+      return { type: 'scheduled', tooltip: 'Partido programado' };
     }
 
-    return { type:'empty', tooltip:'Sin evento' };
+    return { type: 'empty', tooltip: 'Sin evento' };
   };
 
   const renderDayCell = (d) => {
     const ds = getDayStyle(d);
-    const dayNumber = d.month()===viewMonth?d.date():'';
-    let cellContent=null;
-    let cellSx = {cursor:'pointer', width:'40px', height:'40px', position:'relative', p:0};
+    const dayNumber = d.month() === viewMonth ? d.date() : '';
+    let cellContent = null;
+    let cellSx = { cursor: 'pointer', width: '40px', height: '40px', position: 'relative', p: 0 };
 
     if (!dayNumber) {
-      return <TableCell key={d.format()} sx={{backgroundColor:'white'}}></TableCell>;
+      return <TableCell key={d.format()} sx={{ backgroundColor: 'white' }}></TableCell>;
     }
 
-    switch(ds.type) {
+    switch (ds.type) {
       case 'noMatch':
-        cellSx.backgroundColor='grey';
+        cellSx.backgroundColor = 'grey';
         break;
       case 'played':
-        cellSx.background='linear-gradient(to bottom, green 50%, red 50%)';
+        cellSx.background = 'linear-gradient(to bottom, green 50%, red 50%)';
         const wInit = getInitials(ds.winner);
         const lInit = getInitials(ds.loser);
-        cellContent=(
-          <Box sx={{position:'absolute', top:0, left:0, right:0, bottom:0, display:'flex', flexDirection:'column'}}>
-            <Box sx={{flex:1, display:'flex',justifyContent:'center',alignItems:'center',color:'white',fontWeight:'bold'}}>
+        cellContent = (
+          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold' }}>
               {wInit}
             </Box>
-            <Box sx={{flex:1, display:'flex',justifyContent:'center',alignItems:'center',color:'white',fontWeight:'bold'}}>
+            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold' }}>
               {lInit}
             </Box>
           </Box>
         );
         break;
       case 'scheduled':
-        cellSx.backgroundColor='lightblue';
+        cellSx.backgroundColor = 'lightblue';
         break;
       case 'empty':
-        cellSx.backgroundColor='white';
+        cellSx.backgroundColor = 'white';
         break;
       default:
-        cellSx.backgroundColor='white';
+        cellSx.backgroundColor = 'white';
     }
 
+    // Agregamos enterTouchDelay y leaveTouchDelay para mostrar en móviles.
     return (
-      <Tooltip key={d.format()} title={ds.tooltip}>
-        <TableCell align="center" sx={cellSx} onClick={()=>handleDayClick(d)}>
+      <Tooltip
+        key={d.format()}
+        title={ds.tooltip}
+        enterTouchDelay={50}
+        leaveTouchDelay={3000}
+      >
+        <TableCell align="center" sx={cellSx} onClick={() => handleDayClick(d)}>
           {dayNumber}
           {cellContent}
         </TableCell>
@@ -395,59 +400,59 @@ const MatchInfo = () => {
   if (!currentCycle) {
     showPairSelection = true;
   } else {
-    const cycleMatches = results.filter(m=>m.cycleId===currentCycle.id && m.winner && m.loser);
-    if (cycleMatches.length===3) {
+    const cycleMatches = results.filter(m => m.cycleId === currentCycle.id && m.winner && m.loser);
+    if (cycleMatches.length === 3) {
       showPairSelection = true;
     }
   }
 
   const handleSaveNextCycle = async () => {
     if (!pair1Player1 || !pair1Player2 || !pair2Player1 || !pair2Player2) return;
-    const chosen = [pair1Player1,pair1Player2,pair2Player1,pair2Player2];
+    const chosen = [pair1Player1, pair1Player2, pair2Player1, pair2Player2];
     const uniqueChosen = new Set(chosen);
-    if (uniqueChosen.size<4) {
+    if (uniqueChosen.size < 4) {
       alert('Debes elegir 4 jugadores diferentes.');
       return;
     }
 
     const pairsText = `${pair1Player1} & ${pair1Player2} vs ${pair2Player1} & ${pair2Player2}`;
     let startDate = dayjs();
-    if (cycles.length>0) {
-      const lastC = cycles[cycles.length-1];
-      const refDate = lastC.endDate?dayjs(lastC.endDate):dayjs();
-      let found=false;
+    if (cycles.length > 0) {
+      const lastC = cycles[cycles.length - 1];
+      const refDate = lastC.endDate ? dayjs(lastC.endDate) : dayjs();
+      let found = false;
       let checkDate = refDate;
-      for (let i=0;i<60;i++){
-        checkDate=checkDate.add(1,'day');
-        const dow=checkDate.day();
-        if(dow===1||dow===4){
-          startDate=checkDate;
-          found=true;
+      for (let i = 0; i < 60; i++) {
+        checkDate = checkDate.add(1, 'day');
+        const dow = checkDate.day();
+        if (dow === 1 || dow === 4) {
+          startDate = checkDate;
+          found = true;
           break;
         }
       }
-      if(!found) startDate=refDate.add(1,'day');
+      if (!found) startDate = refDate.add(1, 'day');
     } else {
       let d = dayjs();
-      let found=false;
-      for(let i=0;i<60;i++){
-        const dow=d.day();
-        if(dow===1||dow===4){
-          startDate=d;
-          found=true;
+      let found = false;
+      for (let i = 0; i < 60; i++) {
+        const dow = d.day();
+        if (dow === 1 || dow === 4) {
+          startDate = d;
+          found = true;
           break;
         }
-        d=d.add(1,'day');
+        d = d.add(1, 'day');
       }
-      if(!found) startDate=dayjs().add(1,'day');
+      if (!found) startDate = dayjs().add(1, 'day');
     }
 
-    await addDoc(collection(db,'cycles'),{
+    await addDoc(collection(db, 'cycles'), {
       startDate: startDate.format('YYYY-MM-DD'),
       currentPairs: pairsText
     });
     alert('Nuevo ciclo configurado con éxito.');
-    setPair1Player1('');setPair1Player2('');setPair2Player1('');setPair2Player2('');
+    setPair1Player1(''); setPair1Player2(''); setPair2Player1(''); setPair2Player2('');
     loadData();
   };
 
@@ -482,41 +487,41 @@ const MatchInfo = () => {
   if (currentCycle) {
     const played = calculateCycleProgress(currentCycle, results);
     cycleProgress = (
-      <Box sx={{ mt:2 }}>
+      <Box sx={{ mt: 2 }}>
         <Typography variant="body2">Progreso del ciclo: {played} de 3 partidos jugados</Typography>
-        <LinearProgress variant="determinate" value={(played/3)*100}/>
+        <LinearProgress variant="determinate" value={(played / 3) * 100} />
       </Box>
     );
   }
 
-  const cycleHistory = cycles.map((c,i)=>{
-    const cResults = results.filter(m=>m.cycleId===c.id && m.winner && m.loser).sort((a,b)=>dayjs(a.date).diff(dayjs(b.date)));
-    const cNoMatches = noMatchDays.filter(n=> {
+  const cycleHistory = cycles.map((c, i) => {
+    const cResults = results.filter(m => m.cycleId === c.id && m.winner && m.loser).sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+    const cNoMatches = noMatchDays.filter(n => {
       const start = dayjs(c.startDate);
       const end = c.endDate ? dayjs(c.endDate) : null;
-      const nmDate = dayjs(n.date,'YYYY-MM-DD');
+      const nmDate = dayjs(n.date, 'YYYY-MM-DD');
       if (end) {
-        return (nmDate.isAfter(start) || nmDate.isSame(start,'day')) && (nmDate.isBefore(end,'day')||nmDate.isSame(end,'day'));
+        return (nmDate.isAfter(start) || nmDate.isSame(start, 'day')) && (nmDate.isBefore(end, 'day') || nmDate.isSame(end, 'day'));
       } else {
-        return nmDate.isAfter(start) || nmDate.isSame(start,'day');
+        return nmDate.isAfter(start) || nmDate.isSame(start, 'day');
       }
     });
     let cycleResult = '';
-    const pairs = c.currentPairs ? c.currentPairs.split('vs').map(x=>x.trim()) : [];
+    const pairs = c.currentPairs ? c.currentPairs.split('vs').map(x => x.trim()) : [];
     const firstPair = pairs[0];
     const secondPair = pairs[1];
 
-    const wins = cResults.filter(m=>{
+    const wins = cResults.filter(m => {
       if (!c.currentPairs) return false;
-      return m.winner===firstPair;
+      return m.winner === firstPair;
     }).length;
 
-    if (cResults.length===3) {
-      cycleResult = wins>=2?'Victoria':'Derrota';
+    if (cResults.length === 3) {
+      cycleResult = wins >= 2 ? 'Victoria' : 'Derrota';
     }
 
     return {
-      cycleNumber: i+1,
+      cycleNumber: i + 1,
       startDate: c.startDate,
       endDate: c.endDate,
       matches: cResults,
@@ -534,8 +539,8 @@ const MatchInfo = () => {
 
   const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
   let matchHour = '';
-  if (dayOfWeek===1) matchHour='20:00';
-  else if (dayOfWeek===4) matchHour='19:30';
+  if (dayOfWeek === 1) matchHour = '20:00';
+  else if (dayOfWeek === 4) matchHour = '19:30';
 
   return (
     <Container>
@@ -613,16 +618,20 @@ const MatchInfo = () => {
       </Box>
 
       {previousNoMatchMessage && (
-        <Typography variant="body1" sx={{ color:'red', mt:3 }}>{previousNoMatchMessage}</Typography>
+        <Typography variant="body1" sx={{ color: 'red', mt: 3 }}>{previousNoMatchMessage}</Typography>
       )}
       {nextMatchDate && (
-        <Box sx={{ marginTop:'20px', padding:'10px', border:'1px solid #ccc', borderRadius:'8px' }}>
+        <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
           <Typography variant="h6"><strong>Próximo Partido</strong></Typography>
           <Typography variant="body1">Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong></Typography>
+          {matchHour && (
+            <Typography variant="body1">Hora: <strong>{matchHour}</strong></Typography>
+          )}
+          <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
           <Typography variant="body1">Parejas: <strong>{nextMatchPairs}</strong></Typography>
           <Typography variant="body1">{nextMatchInfo}</Typography>
           {currentCycle && (
-            <Typography variant="body1" sx={{ mt:1 }}>
+            <Typography variant="body1" sx={{ mt: 1 }}>
               Parejas en el ciclo en curso: <strong>{currentCycle.currentPairs}</strong>
             </Typography>
           )}
@@ -646,87 +655,87 @@ const MatchInfo = () => {
       )}
 
       {showPairSelection && (
-        <Box sx={{ marginTop:'20px', padding:'10px', border:'1px solid #ccc', borderRadius:'8px' }}>
+        <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
           <Typography variant="h6">Configurar Próximo Ciclo</Typography>
           <Typography variant="body2">Selecciona 4 jugadores diferentes para las parejas del próximo ciclo.</Typography>
-          <Grid container spacing={2} sx={{ mt:1 }}>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={6}>
               <FormControl fullWidth>
                 <InputLabel>Pareja 1 - Jugador 1</InputLabel>
-                <Select value={pair1Player1} onChange={(e)=>setPair1Player1(e.target.value)}>
-                  {availablePlayers.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}
+                <Select value={pair1Player1} onChange={(e) => setPair1Player1(e.target.value)}>
+                  {availablePlayers.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={6}>
               <FormControl fullWidth>
                 <InputLabel>Pareja 1 - Jugador 2</InputLabel>
-                <Select value={pair1Player2} onChange={(e)=>setPair1Player2(e.target.value)}>
-                  {availablePlayers.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}
+                <Select value={pair1Player2} onChange={(e) => setPair1Player2(e.target.value)}>
+                  {availablePlayers.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={6}>
               <FormControl fullWidth>
                 <InputLabel>Pareja 2 - Jugador 1</InputLabel>
-                <Select value={pair2Player1} onChange={(e)=>setPair2Player1(e.target.value)}>
-                  {availablePlayers.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}
+                <Select value={pair2Player1} onChange={(e) => setPair2Player1(e.target.value)}>
+                  {availablePlayers.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={6}>
               <FormControl fullWidth>
                 <InputLabel>Pareja 2 - Jugador 2</InputLabel>
-                <Select value={pair2Player2} onChange={(e)=>setPair2Player2(e.target.value)}>
-                  {availablePlayers.map(p=><MenuItem key={p} value={p}>{p}</MenuItem>)}
+                <Select value={pair2Player2} onChange={(e) => setPair2Player2(e.target.value)}>
+                  {availablePlayers.map(p => <MenuItem key={p} value={p}>{p}</MenuItem>)}
                 </Select>
               </FormControl>
             </Grid>
           </Grid>
-          <Box sx={{ textAlign:'right', mt:2 }}>
+          <Box sx={{ textAlign: 'right', mt: 2 }}>
             <Button variant="contained" onClick={handleSaveNextCycle}>Guardar</Button>
           </Box>
         </Box>
       )}
 
-      <Box sx={{ display:'flex', justifyContent:'space-between', alignItems:'center', mt:4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
         <Button variant="outlined" onClick={handlePrevMonth}>Mes Anterior</Button>
         <Typography variant="body1">{dayjs().year(viewYear).month(viewMonth).format('MMMM YYYY')}</Typography>
         <Button variant="outlined" onClick={handleNextMonth}>Mes Siguiente</Button>
       </Box>
 
-      <Box sx={{ marginTop:'20px' }}>
+      <Box sx={{ marginTop: '20px' }}>
         <Typography variant="h6"><strong>Calendario</strong></Typography>
         <Typography variant="body2">Haz clic en un día para marcar "Día sin partido".</Typography>
-        <Box sx={{ marginTop:'10px', overflowX:'auto' }}>
+        <Box sx={{ marginTop: '10px', overflowX: 'auto' }}>
           <TableContainer component={Paper}>
             <TableBody>
               <TableRow>
-                {['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=>(
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
                   <TableCell key={d} align="center"><strong>{d}</strong></TableCell>
                 ))}
               </TableRow>
-              {(()=>{
+              {(() => {
                 const startOfMonth = dayjs().year(viewYear).month(viewMonth).startOf('month');
                 const endOfMonth = dayjs().year(viewYear).month(viewMonth).endOf('month');
                 const weeks = [];
                 let startDay = startOfMonth;
-                while (startDay.day()!==1) {
-                  startDay = startDay.subtract(1,'day');
+                while (startDay.day() !== 1) {
+                  startDay = startDay.subtract(1, 'day');
                 }
                 let currentDay = startDay.clone();
-                while (currentDay.isBefore(endOfMonth) || currentDay.isSame(endOfMonth,'day')) {
+                while (currentDay.isBefore(endOfMonth) || currentDay.isSame(endOfMonth, 'day')) {
                   const weekDays = [];
-                  for (let i=0; i<7; i++) {
+                  for (let i = 0; i < 7; i++) {
                     weekDays.push(currentDay);
-                    currentDay = currentDay.add(1,'day');
+                    currentDay = currentDay.add(1, 'day');
                   }
                   weeks.push(weekDays);
                 }
 
-                return weeks.map((week,wIndex)=>(
+                return weeks.map((week, wIndex) => (
                   <TableRow key={wIndex}>
-                    {week.map(day=>renderDayCell(day))}
+                    {week.map(day => renderDayCell(day))}
                   </TableRow>
                 ));
               })()}
@@ -735,7 +744,7 @@ const MatchInfo = () => {
         </Box>
       </Box>
 
-      <Box sx={{ mt:2 }}>
+      <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle1"><strong>Leyenda:</strong></Typography>
         <Typography variant="body2">- Mitad superior verde y mitad inferior roja: Partido jugado (superior=ganador, inferior=perdedor, iniciales)</Typography>
         <Typography variant="body2">- Gris: Día sin partido</Typography>
@@ -743,26 +752,26 @@ const MatchInfo = () => {
         <Typography variant="body2">- Blanco: Sin evento</Typography>
       </Box>
 
-      <Modal open={modalOpen} onClose={()=>setModalOpen(false)}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
         <Box sx={styleModal}>
           <IconButton
-            sx={{ position:'absolute', top:5, right:5, color:'red' }}
-            onClick={()=>setModalOpen(false)}
+            sx={{ position: 'absolute', top: 5, right: 5, color: 'red' }}
+            onClick={() => setModalOpen(false)}
           >
             <CloseIcon />
           </IconButton>
           <Typography variant="h6">Marcar como día sin partido</Typography>
-          <Typography variant="body1" sx={{ mt:2 }}>
+          <Typography variant="body1" sx={{ mt: 2 }}>
             {selectedDay ? `Día: ${selectedDay.format('DD/MM/YYYY')}` : ''}
           </Typography>
           <TextField
             fullWidth
             label="Motivo (opcional)"
             value={noMatchReason}
-            onChange={(e)=>setNoMatchReason(e.target.value)}
-            sx={{ mt:2 }}
+            onChange={(e) => setNoMatchReason(e.target.value)}
+            sx={{ mt: 2 }}
           />
-          <Box sx={{ textAlign:'right', mt:2 }}>
+          <Box sx={{ textAlign: 'right', mt: 2 }}>
             <Button variant="contained" onClick={handleNoMatchSave}>
               Guardar
             </Button>
@@ -770,33 +779,33 @@ const MatchInfo = () => {
         </Box>
       </Modal>
 
-      <Box sx={{ marginTop:'30px' }}>
+      <Box sx={{ marginTop: '30px' }}>
         <Typography variant="h6"><strong>Historial de Ciclos</strong></Typography>
-        {(()=>{
+        {(() => {
           const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
           const endIndexCycles = startIndexCycles + cyclesPerPage;
           const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
 
           const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
           let nextMatchHour = '';
-          if (dayOfWeek===1) nextMatchHour='20:00';
-          else if (dayOfWeek===4) nextMatchHour='19:30';
+          if (dayOfWeek === 1) nextMatchHour = '20:00';
+          else if (dayOfWeek === 4) nextMatchHour = '19:30';
 
           return (
             <>
-              {paginatedCycles.map(ch=>{
-                let winnerPairCycle='';
-                if (ch.result==='Victoria') {
+              {paginatedCycles.map(ch => {
+                let winnerPairCycle = '';
+                if (ch.result === 'Victoria') {
                   winnerPairCycle = ch.firstPair;
-                } else if (ch.result==='Derrota') {
+                } else if (ch.result === 'Derrota') {
                   winnerPairCycle = ch.secondPair;
                 }
 
-                const lastMatch = ch.matches.length > 0 ? ch.matches[ch.matches.length-1] : null;
+                const lastMatch = ch.matches.length > 0 ? ch.matches[ch.matches.length - 1] : null;
 
                 return (
-                  <Box key={ch.cycleNumber} sx={{ mt:2 }}>
-                    <Typography variant="subtitle1">
+                  <Box key={ch.cycleNumber} sx={{ mt: 2 }}>
+                    <Typography variant="subtitle1" sx={{ color: 'red', fontWeight: 'bold' }}>
                       {ch.cycleNumber}º ciclo
                       {' ('}
                       {dayjs(ch.startDate).format('DD/MM/YYYY')}
@@ -804,43 +813,43 @@ const MatchInfo = () => {
                       {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'}
                       {')'}
                     </Typography>
-                    <Divider sx={{my:1}}/>
-                    {ch.matches.map((m,i)=>(
+                    <Divider sx={{ my: 1 }} />
+                    {ch.matches.map((m, i) => (
                       <Typography variant="body2" key={m.id}>
-                        <strong>{dayjs(m.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
+                        <strong>{dayjs(m.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
                       </Typography>
                     ))}
-                    {ch.noMatches.map((nm)=>( 
-                      <Typography variant="body2" key={'nm-'+nm.id}>
-                        <strong>{dayjs(nm.date,'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason?' (motivo: '+nm.reason+')':''}
+                    {ch.noMatches.map((nm) => (
+                      <Typography variant="body2" key={'nm-' + nm.id}>
+                        <strong>{dayjs(nm.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason ? ' (motivo: ' + nm.reason + ')' : ''}
                       </Typography>
                     ))}
                     {ch.result && (
-                      <Typography variant="body2" sx={{ fontWeight:'bold', mt:1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
                         Resultado del ciclo: Ganador: <strong>{winnerPairCycle}</strong>
                       </Typography>
                     )}
-                    {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber===currentCycleNumber && nextMatchDate && (
-                      <Box sx={{ mt:1 }}>
+                    {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber === currentCycleNumber && nextMatchDate && (
+                      <Box sx={{ mt: 1 }}>
                         {lastMatch && (
-                          <Typography variant="body2" sx={{ fontWeight:'bold', mb:1 }}>
-                            Último resultado del ciclo: {lastMatch.winner} ganaron contra {lastMatch.loser} el {dayjs(lastMatch.date,'YYYY-MM-DD').format('DD/MM/YYYY')}
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                            Último resultado del ciclo: {lastMatch.winner} ganaron contra {lastMatch.loser} el {dayjs(lastMatch.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}
                           </Typography>
                         )}
-                        <Typography variant="body2" sx={{ fontWeight:'bold' }}>Próximo partido:</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Próximo partido:</Typography>
                         <Typography variant="body2">
                           {nextMatchPairs}
                         </Typography>
                         <Typography variant="body2">
-                          Fecha: {nextMatchDate.format('DD/MM/YYYY')}
+                          Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong>
                         </Typography>
                         {nextMatchHour && (
                           <Typography variant="body2">
-                            Hora: {nextMatchHour}
+                            Hora: <strong>{nextMatchHour}</strong>
                           </Typography>
                         )}
                         <Typography variant="body2">
-                          Lugar: Passing Padel
+                          Lugar: <strong>Passing Padel</strong>
                         </Typography>
                       </Box>
                     )}
