@@ -13,7 +13,6 @@ import {
   Paper,
   Grid,
   Divider,
-  TableContainer,
   TableBody,
   TableRow,
   TableCell,
@@ -25,14 +24,12 @@ import {
   LinearProgress
 } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import InfoIcon from '@mui/icons-material/Info';
 import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { collection, getDocs, addDoc, doc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase'; // Ajustar según la configuración
+import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 dayjs.locale('es');
 
@@ -49,6 +46,14 @@ const styleModal = {
 };
 
 const availablePlayers = ['Lucas', 'Bort', 'Martin', 'Ricardo'];
+
+const cyclesPerPage = 3;
+
+const getPairIdentifier = (pairString) => {
+  // pairString formato "Jugador1 & Jugador2"
+  const players = pairString.split('&').map(p => p.trim()).sort();
+  return players.join(' & ');
+};
 
 const MatchInfo = () => {
   const navigate = useNavigate();
@@ -71,9 +76,6 @@ const MatchInfo = () => {
   const [currentCycleNumber, setCurrentCycleNumber] = useState(0);
   const [previousNoMatchMessage, setPreviousNoMatchMessage] = useState('');
 
-  const itemsPerPage = 10;
-  const [currentPage, setCurrentPage] = useState(1);
-
   const [viewYear, setViewYear] = useState(2024);
   const [viewMonth, setViewMonth] = useState(11);
 
@@ -83,10 +85,13 @@ const MatchInfo = () => {
   const [pair2Player2, setPair2Player2] = useState('');
 
   const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
-  const cyclesPerPage = 5;
 
-  const [minDate, setMinDate] = useState(null);
-  const [maxDate, setMaxDate] = useState(null);
+  // Modal para determinar ganador manualmente
+  const [manualWinnerModalOpen, setManualWinnerModalOpen] = useState(false);
+  const [manualWinnerPair, setManualWinnerPair] = useState('');
+  const [manualWinnerCycle, setManualWinnerCycle] = useState(null);
+  const [manualFirstPair, setManualFirstPair] = useState('');
+  const [manualSecondPair, setManualSecondPair] = useState('');
 
   const recalculateCycleForResults = (loadedCycles, loadedResults) => {
     for (const r of loadedResults) {
@@ -111,18 +116,41 @@ const MatchInfo = () => {
     }
   };
 
-  const recalculateMatchNumbers = (loadedCycles, loadedResults) => {
+  const handleCycleAutoClose = async (cycle, cycleMatches) => {
+    if (!cycle || cycle.endDate) return;
+
+    if (cycleMatches.length >= 2) {
+      const firstMatch = cycleMatches[0];
+      const secondMatch = cycleMatches[1];
+
+      if (firstMatch && secondMatch && firstMatch.winner && secondMatch.winner) {
+        if (firstMatch.winner === secondMatch.winner) {
+          const secondMatchDate = dayjs(secondMatch.date);
+          const cycleRef = doc(db, 'cycles', cycle.id);
+          await updateDoc(cycleRef, {
+            endDate: secondMatchDate.format('YYYY-MM-DD')
+          });
+        }
+      }
+    }
+  };
+
+  const recalculateMatchNumbers = async (loadedCycles, loadedResults) => {
     for (const c of loadedCycles) {
       const cycleMatches = loadedResults.filter(m => m.cycleId === c.id && m.winner && m.loser)
         .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
       cycleMatches.forEach((m, i) => {
         m.matchNumberInCycle = i + 1;
       });
+
+      await handleCycleAutoClose(c, cycleMatches);
     }
   };
 
   const updateNextMatch = (current, loadedCycles, loadedResults, loadedNoMatch) => {
-    const cycleResults = loadedResults.filter(m => m.cycleId === current.id && m.winner && m.loser);
+    const cycleResults = loadedResults.filter(m => m.cycleId === current.id && m.winner && m.loser)
+      .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+
     let lastMatchDate = null;
     cycleResults.forEach(m => {
       const d = dayjs(m.date, 'YYYY-MM-DD');
@@ -130,6 +158,27 @@ const MatchInfo = () => {
         lastMatchDate = d;
       }
     });
+
+    let firstPair = '', secondPair = '';
+    let fWins = 0, sWins = 0;
+    if (current.currentPairs) {
+      const cp = current.currentPairs.replace(/\sy\s/gi, ' & ');
+      const pairs = cp.split('vs').map(p => p.trim());
+      firstPair = getPairIdentifier(pairs[0]);
+      secondPair = getPairIdentifier(pairs[1]);
+
+      fWins = cycleResults.filter(m => m.winner === firstPair).length;
+      sWins = cycleResults.filter(m => m.winner === secondPair).length;
+    }
+
+    // Si ya hay 2 partidos
+    if (cycleResults.length === 2) {
+      if (fWins === 2 || sWins === 2) {
+        setNextMatchDate(null);
+        setPreviousNoMatchMessage('El ciclo ha finalizado después de dos partidos.');
+        return;
+      }
+    }
 
     let nextDate = current.startDate ? dayjs(current.startDate) : dayjs();
     if (lastMatchDate) {
@@ -174,6 +223,14 @@ const MatchInfo = () => {
       loadedCycles.push({ id: docu.id, ...docu.data() });
     });
     loadedCycles.sort((a, b) => dayjs(a.startDate).diff(dayjs(b.startDate)));
+
+    // Normalizar currentPairs
+    for (const c of loadedCycles) {
+      if (c.currentPairs) {
+        c.currentPairs = c.currentPairs.replace(/\sy\s/gi, ' & ');
+      }
+    }
+
     setCycles(loadedCycles);
 
     const now = dayjs();
@@ -216,28 +273,26 @@ const MatchInfo = () => {
         });
       }
 
-      const pair1Name = `${r.pair1.player1} & ${r.pair1.player2}`;
-      const pair2Name = `${r.pair2.player1} & ${r.pair2.player2}`;
+      const p1Name = getPairIdentifier(`${r.pair1.player1} & ${r.pair1.player2}`);
+      const p2Name = getPairIdentifier(`${r.pair2.player1} & ${r.pair2.player2}`);
+
       let winner = '', loser = '';
       if (pair1SetsWon > pair2SetsWon) {
-        winner = pair1Name; loser = pair2Name;
+        winner = p1Name; loser = p2Name;
       } else if (pair2SetsWon > pair1SetsWon) {
-        winner = pair2Name; loser = pair1Name;
+        winner = p2Name; loser = p1Name;
       }
 
       loadedResults.push({
         id: docu.id,
         ...r,
         winner,
-        loser,
+        loser
       });
     });
 
-    // Asociar resultados a sus ciclos
-    recalculateCycleForResults(loadedCycles, loadedResults);
-
-    // Recalcular matchNumberInCycle
-    recalculateMatchNumbers(loadedCycles, loadedResults);
+    await recalculateCycleForResults(loadedCycles, loadedResults);
+    await recalculateMatchNumbers(loadedCycles, loadedResults);
 
     setResults(loadedResults);
 
@@ -249,13 +304,6 @@ const MatchInfo = () => {
       setNextMatchDate(null);
       setNextMatchPairs('');
       setPreviousNoMatchMessage('');
-    }
-
-    if (loadedCycles.length > 0) {
-      const firstC = loadedCycles[0];
-      const lastC = loadedCycles[loadedCycles.length - 1];
-      setMinDate(dayjs(firstC.startDate));
-      setMaxDate(lastC.endDate ? dayjs(lastC.endDate) : dayjs());
     }
   };
 
@@ -299,11 +347,6 @@ const MatchInfo = () => {
     setViewYear(newYear);
   };
 
-  const getInitials = (pairName) => {
-    const names = pairName.split('&').map(s => s.trim());
-    return names.map(n => n.charAt(0)).join('&');
-  };
-
   const getSetsString = (sets) => {
     if (!sets) return '';
     return sets.map(s => `${s.pair1Score}-${s.pair2Score}`).join(', ');
@@ -315,24 +358,21 @@ const MatchInfo = () => {
     return `${match.winner} ganaron contra ${match.loser} (${setsDetail}) en ${match.location}. ${matchOrdinalText}.`;
   };
 
-  // Ahora el tooltip contendrá un botón para marcar el día sin partido
-  const renderTooltipContent = (ds, d) => {
-    return (
-      <Box>
-        <Typography variant="body2">{ds.tooltip}</Typography>
-        <Button
-          variant="text"
-          sx={{ mt: 1, textTransform:'none' }}
-          onClick={() => {
-            setSelectedDay(d);
-            setModalOpen(true);
-          }}
-        >
-          Marcar día sin partido
-        </Button>
-      </Box>
-    );
-  };
+  const renderTooltipContent = (ds, d) => (
+    <Box>
+      <Typography variant="body2">{ds.tooltip}</Typography>
+      <Button
+        variant="text"
+        sx={{ mt: 1, textTransform:'none' }}
+        onClick={() => {
+          setSelectedDay(d);
+          setModalOpen(true);
+        }}
+      >
+        Marcar día sin partido
+      </Button>
+    </Box>
+  );
 
   const getDayStyle = (d) => {
     const nm = noMatchDays.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(d, 'day'));
@@ -353,6 +393,11 @@ const MatchInfo = () => {
     }
 
     return { type: 'empty', tooltip: 'Sin evento' };
+  };
+
+  const getInitials = (pairName) => {
+    const names = pairName.split('&').map(s => s.trim());
+    return names.map(n => n.charAt(0)).join('&');
   };
 
   const renderDayCell = (d) => {
@@ -414,7 +459,7 @@ const MatchInfo = () => {
     showPairSelection = true;
   } else {
     const cycleMatches = results.filter(m => m.cycleId === currentCycle.id && m.winner && m.loser);
-    if (cycleMatches.length === 3) {
+    if (cycleMatches.length === 3 || (currentCycle.endDate && cycleMatches.length >= 1)) {
       showPairSelection = true;
     }
   }
@@ -507,6 +552,40 @@ const MatchInfo = () => {
     );
   }
 
+  const closedCycles = cycles.filter(c => c.endDate);
+  let lastClosedCycle = null;
+  let lastClosedCycleWinner = '';
+  if (closedCycles.length > 0) {
+    lastClosedCycle = closedCycles[closedCycles.length - 1];
+    const closedResults = results.filter(m => m.cycleId === lastClosedCycle.id && m.winner && m.loser);
+
+    if (lastClosedCycle.currentPairs) {
+      const cp = lastClosedCycle.currentPairs;
+      const pairs = cp.split('vs').map(p => p.trim());
+      const fPair = getPairIdentifier(pairs[0]);
+      const sPair = getPairIdentifier(pairs[1]);
+
+      const fWins = closedResults.filter(m => m.winner === fPair).length;
+      const sWins = closedResults.filter(m => m.winner === sPair).length;
+
+      if (fWins >= 2) {
+        lastClosedCycleWinner = fPair;
+      } else if (sWins >= 2) {
+        lastClosedCycleWinner = sPair;
+      } else if (fWins === 1 && sWins === 0) {
+        lastClosedCycleWinner = fPair;
+      } else if (sWins === 1 && fWins === 0) {
+        lastClosedCycleWinner = sPair;
+      } else if (closedResults.length === 0) {
+        lastClosedCycleWinner = 'Sin partidos jugados';
+      } else {
+        lastClosedCycleWinner = 'Datos no concluyentes';
+      }
+    } else {
+      lastClosedCycleWinner = 'Datos no concluyentes';
+    }
+  }
+
   const cycleHistory = cycles.map((c, i) => {
     const cResults = results.filter(m => m.cycleId === c.id && m.winner && m.loser).sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
     const cNoMatches = noMatchDays.filter(n => {
@@ -519,18 +598,42 @@ const MatchInfo = () => {
         return nmDate.isAfter(start) || nmDate.isSame(start, 'day');
       }
     });
-    let cycleResult = '';
-    const pairs = c.currentPairs ? c.currentPairs.split('vs').map(x => x.trim()) : [];
-    const firstPair = pairs[0];
-    const secondPair = pairs[1];
 
-    const wins = cResults.filter(m => {
-      if (!c.currentPairs) return false;
-      return m.winner === firstPair;
-    }).length;
+    let cycleState = 'En curso';
+    let winnerPairCycle = '';
 
-    if (cResults.length === 3) {
-      cycleResult = wins >= 2 ? 'Victoria' : 'Derrota';
+    const cp = c.currentPairs ? c.currentPairs : '';
+    const pairs = cp ? cp.split('vs').map(p => p.trim()) : [];
+    const fPair = pairs[0] ? getPairIdentifier(pairs[0]) : '';
+    const sPair = pairs[1] ? getPairIdentifier(pairs[1]) : '';
+
+    const fWins = cResults.filter(m => m.winner === fPair).length;
+    const sWins = cResults.filter(m => m.winner === sPair).length;
+
+    if (c.endDate) {
+      cycleState = 'Cerrado';
+      if (cp) {
+        if (fWins >= 2) {
+          winnerPairCycle = fPair;
+        } else if (sWins >= 2) {
+          winnerPairCycle = sPair;
+        } else if (fWins === 1 && sWins === 0) {
+          winnerPairCycle = fPair;
+        } else if (sWins === 1 && fWins === 0) {
+          winnerPairCycle = sPair;
+        } else if (cResults.length === 0) {
+          winnerPairCycle = 'Sin partidos jugados';
+        } else {
+          winnerPairCycle = 'Datos no concluyentes';
+        }
+      } else {
+        winnerPairCycle = 'Datos no concluyentes';
+      }
+    } else {
+      // en curso
+      if (cResults.length === 0) {
+        winnerPairCycle = 'Sin partidos jugados';
+      }
     }
 
     return {
@@ -539,21 +642,51 @@ const MatchInfo = () => {
       endDate: c.endDate,
       matches: cResults,
       noMatches: cNoMatches,
-      result: cycleResult,
-      currentPairs: c.currentPairs,
-      firstPair,
-      secondPair
+      currentPairs: cp,
+      firstPair: fPair,
+      secondPair: sPair,
+      winnerPairCycle,
+      cycleState
     };
   });
 
-  const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
-  const endIndexCycles = startIndexCycles + cyclesPerPage;
-  const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
+  const sortedCycles = [...cycleHistory].sort((a, b) => {
+    if (a.cycleState === 'En curso' && b.cycleState !== 'En curso') return -1;
+    if (b.cycleState === 'En curso' && a.cycleState !== 'En curso') return 1;
+    return dayjs(b.startDate).diff(dayjs(a.startDate));
+  });
+
+  const startIndex = (cyclesCurrentPage - 1) * cyclesPerPage;
+  const paginatedCycles = sortedCycles.slice(startIndex, startIndex + cyclesPerPage);
 
   const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
   let matchHour = '';
   if (dayOfWeek === 1) matchHour = '20:00';
   else if (dayOfWeek === 4) matchHour = '19:30';
+
+  // Función para guardar ganador manual
+  const handleManualWinnerSave = async () => {
+    if (!manualWinnerCycle || !manualWinnerPair) {
+      alert('Debes seleccionar un ganador.');
+      return;
+    }
+
+    // Actualizar el ciclo en Firebase: Si no tiene endDate, poner endDate hoy
+    const cycleRef = doc(db, 'cycles', manualWinnerCycle.id);
+    const endDate = manualWinnerCycle.endDate ? manualWinnerCycle.endDate : dayjs().format('YYYY-MM-DD');
+    await updateDoc(cycleRef, {
+      endDate
+      // El currentPairs se mantiene igual, ya que no cambia.
+    });
+
+    // Luego recargar datos
+    setManualWinnerModalOpen(false);
+    setManualWinnerPair('');
+    setManualWinnerCycle(null);
+    setManualFirstPair('');
+    setManualSecondPair('');
+    loadData();
+  };
 
   return (
     <Container>
@@ -561,29 +694,29 @@ const MatchInfo = () => {
         <Typography variant="h5">Información de las Partidas</Typography>
       </Box>
 
-      {/* Partidas recurrentes */}
+      {/* Sección de información de las partidas recurrentes */}
       <Box sx={{ marginTop: '20px' }}>
-        <Typography variant="h6"><strong>Partida del Lunes</strong></Typography>
+        <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold' }}>
+          Partida del Lunes
+        </Typography>
         <Typography variant="body1">Fecha: Lunes, <strong>20:00 - 21:30</strong></Typography>
         <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
         <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
-        <Box sx={{ marginTop: '10px' }}>
-          <iframe
-            src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
-            width="100%"
-            height="300"
-            style={{ border: 0 }}
-            allowFullScreen=""
-            loading="lazy"
-            title="Mapa Passing Padel"
-          ></iframe>
-        </Box>
-        <Box sx={{ textAlign: 'center', marginTop: '20px' }}>
+        <iframe
+          src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
+          width="100%"
+          height="300"
+          style={{ border: 0, marginTop: '10px' }}
+          allowFullScreen=""
+          loading="lazy"
+          title="Mapa Passing Padel"
+        ></iframe>
+        <Box sx={{ textAlign: 'center', marginTop: '10px' }}>
           <Button
             component="a"
             href={calendarLinkMonday}
             target="_blank"
-            startIcon={<NotificationsActiveIcon sx={{ color: 'red' }} />}
+            startIcon={<NotificationsActiveIcon />}
             sx={{
               textTransform: 'none',
               backgroundColor: '#f0f0f0',
@@ -594,30 +727,28 @@ const MatchInfo = () => {
             Añadir la Partida del Lunes a Google Calendar
           </Button>
         </Box>
-      </Box>
 
-      <Box sx={{ marginTop: '20px' }}>
-        <Typography variant="h6"><strong>Partida del Jueves</strong></Typography>
+        <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold', marginTop: '20px' }}>
+          Partida del Jueves
+        </Typography>
         <Typography variant="body1">Fecha: Jueves, <strong>19:30 - 21:00</strong></Typography>
         <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
         <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
-        <Box sx={{ marginTop: '10px' }}>
-          <iframe
-            src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
-            width="100%"
-            height="300"
-            style={{ border: 0 }}
-            allowFullScreen=""
-            loading="lazy"
-            title="Mapa Passing Padel"
-          ></iframe>
-        </Box>
-        <Box sx={{ textAlign: 'center', marginTop: '20px' }}>
+        <iframe
+          src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
+          width="100%"
+          height="300"
+          style={{ border: 0, marginTop: '10px' }}
+          allowFullScreen=""
+          loading="lazy"
+          title="Mapa Passing Padel"
+        ></iframe>
+        <Box sx={{ textAlign: 'center', marginTop: '10px' }}>
           <Button
             component="a"
             href={calendarLinkThursday}
             target="_blank"
-            startIcon={<NotificationsActiveIcon sx={{ color: 'red' }} />}
+            startIcon={<NotificationsActiveIcon />}
             sx={{
               textTransform: 'none',
               backgroundColor: '#f0f0f0',
@@ -630,10 +761,23 @@ const MatchInfo = () => {
         </Box>
       </Box>
 
+      {/* Título "Ciclos de Partidas" */}
+      <Typography
+        variant="h4"
+        sx={{
+          textAlign: 'center',
+          marginTop: '30px',
+          marginBottom: '20px',
+          fontWeight: 'bold'
+        }}
+      >
+        Ciclos de Partidas
+      </Typography>
+
       {previousNoMatchMessage && (
         <Typography variant="body1" sx={{ color: 'red', mt: 3 }}>{previousNoMatchMessage}</Typography>
       )}
-      {nextMatchDate && (
+      {nextMatchDate && currentCycle && !currentCycle.endDate && (
         <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
           <Typography variant="h6"><strong>Próximo Partido</strong></Typography>
           <Typography variant="body1">Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong></Typography>
@@ -664,6 +808,15 @@ const MatchInfo = () => {
               </Button>
             </Box>
           )}
+        </Box>
+      )}
+
+      {/* Último ciclo cerrado y su ganador */}
+      {!currentCycle && lastClosedCycle && lastClosedCycleWinner && lastClosedCycleWinner !== 'Sin partidos jugados' && lastClosedCycleWinner !== 'Datos no concluyentes' && (
+        <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
+          <Typography variant="body1">
+            Último ciclo cerrado: Ganador - <strong>{lastClosedCycleWinner}</strong>
+          </Typography>
         </Box>
       )}
 
@@ -705,19 +858,18 @@ const MatchInfo = () => {
               </FormControl>
             </Grid>
           </Grid>
-          <Box sx={{ textAlign: 'right', mt: 2 }}>
+          <Box sx={{ textAlign:'right', mt:2 }}>
             <Button variant="contained" onClick={handleSaveNextCycle}>Guardar</Button>
           </Box>
         </Box>
       )}
 
-      {/* Ajuste del diseño para el mes/año y botones de navegación usando Grid */}
       <Grid container spacing={2} alignItems="center" justifyContent="center" sx={{ mt: 4 }}>
         <Grid item xs={4} sm={3} md={2}>
           <Button variant="outlined" fullWidth onClick={handlePrevMonth}>Mes Anterior</Button>
         </Grid>
-        <Grid item xs={4} sm={6} md={4} sx={{ textAlign:'center' }}>
-          <Typography variant="body1" sx={{ fontWeight:'bold' }}>
+        <Grid item xs={4} sm={6} md={4} sx={{ textAlign: 'center' }}>
+          <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
             {dayjs().year(viewYear).month(viewMonth).format('MMMM YYYY')}
           </Typography>
         </Grid>
@@ -730,7 +882,7 @@ const MatchInfo = () => {
         <Typography variant="h6"><strong>Calendario</strong></Typography>
         <Typography variant="body2">Toca un día para mostrar opciones. Luego pulsa "Marcar día sin partido" en el tooltip.</Typography>
         <Box sx={{ marginTop: '10px', overflowX: 'auto' }}>
-          <TableContainer component={Paper}>
+          <Paper>
             <TableBody>
               <TableRow>
                 {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
@@ -762,7 +914,7 @@ const MatchInfo = () => {
                 ));
               })()}
             </TableBody>
-          </TableContainer>
+          </Paper>
         </Box>
       </Box>
 
@@ -793,7 +945,7 @@ const MatchInfo = () => {
             onChange={(e) => setNoMatchReason(e.target.value)}
             sx={{ mt: 2 }}
           />
-          <Box sx={{ textAlign: 'right', mt: 2 }}>
+          <Box sx={{ textAlign:'right', mt:2 }}>
             <Button variant="contained" onClick={handleNoMatchSave}>
               Guardar
             </Button>
@@ -804,9 +956,8 @@ const MatchInfo = () => {
       <Box sx={{ marginTop: '30px' }}>
         <Typography variant="h6"><strong>Historial de Ciclos</strong></Typography>
         {(() => {
-          const startIndexCycles = (cyclesCurrentPage - 1) * cyclesPerPage;
-          const endIndexCycles = startIndexCycles + cyclesPerPage;
-          const paginatedCycles = cycleHistory.slice(startIndexCycles, endIndexCycles);
+          const startIndex = (cyclesCurrentPage - 1) * cyclesPerPage;
+          const paginatedCycles = sortedCycles.slice(startIndex, startIndex + cyclesPerPage);
 
           const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
           let nextMatchHour = '';
@@ -816,29 +967,30 @@ const MatchInfo = () => {
           return (
             <>
               {paginatedCycles.map(ch => {
-                let winnerPairCycle = '';
-                if (ch.result === 'Victoria') {
-                  winnerPairCycle = ch.firstPair;
-                } else if (ch.result === 'Derrota') {
-                  winnerPairCycle = ch.secondPair;
-                }
-
                 const lastMatch = ch.matches.length > 0 ? ch.matches[ch.matches.length - 1] : null;
+                const datosNoConcluyentes = (ch.winnerPairCycle === 'Datos no concluyentes');
 
                 return (
-                  <Box key={ch.cycleNumber} sx={{ mt: 2 }}>
-                    <Typography variant="subtitle1" sx={{ color: 'red', fontWeight: 'bold' }}>
-                      {ch.cycleNumber}º ciclo
-                      {' ('}
-                      {dayjs(ch.startDate).format('DD/MM/YYYY')}
-                      {' - '}
-                      {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'}
-                      {')'}
+                  <Box
+                    key={ch.cycleNumber}
+                    sx={{
+                      padding: '10px',
+                      border: ch.cycleState === 'En curso' ? '2px solid #2196f3' : '1px solid #ccc',
+                      borderRadius: '8px',
+                      backgroundColor: 'transparent',
+                      marginBottom: '10px'
+                    }}
+                  >
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color:'red' }}>
+                      {ch.cycleNumber}º ciclo ({dayjs(ch.startDate).format('DD/MM/YYYY')} - {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'})
+                      {ch.cycleState === 'En curso' && (
+                        <span style={{ color: '#1976d2', marginLeft: '8px' }}>Ciclo actual</span>
+                      )}
                     </Typography>
                     <Divider sx={{ my: 1 }} />
                     {ch.matches.map((m, i) => (
                       <Typography variant="body2" key={m.id}>
-                        <strong>{dayjs(m.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} y {m.pair1.player2} vs {m.pair2.player1} y {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
+                        <strong>{dayjs(m.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: {m.pair1.player1} & {m.pair1.player2} vs {m.pair2.player1} & {m.pair2.player2} (Ganador: <strong>{m.winner}</strong>)
                       </Typography>
                     ))}
                     {ch.noMatches.map((nm) => (
@@ -846,11 +998,46 @@ const MatchInfo = () => {
                         <strong>{dayjs(nm.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason ? ' (motivo: ' + nm.reason + ')' : ''}
                       </Typography>
                     ))}
-                    {ch.result && (
+                    {ch.cycleState === 'Cerrado' && (
                       <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        Resultado del ciclo: Ganador: <strong>{winnerPairCycle}</strong>
+                        Ciclo Cerrado: Ganador: <strong>{ch.winnerPairCycle}</strong>
                       </Typography>
                     )}
+                    {ch.cycleState === 'En curso' && !ch.endDate && ch.matches.length === 0 && (
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
+                        En curso: Sin partidos jugados
+                      </Typography>
+                    )}
+                    {ch.cycleState === 'En curso' && !ch.endDate && ch.matches.length > 0 && (
+                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
+                        En curso
+                      </Typography>
+                    )}
+
+                    {/* Mostrar botón para determinar ganador manualmente SOLO si ciclo cerrado y datos no concluyentes */}
+                    {ch.cycleState === 'Cerrado' && ch.winnerPairCycle === 'Datos no concluyentes' && (
+                      <Box sx={{ marginTop: '10px', textAlign: 'center' }}>
+                        <Typography variant="body2" sx={{ fontStyle: 'italic' }}>¿No se puede determinar el ganador?</Typography>
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            setManualWinnerCycle(manualWinnerCycle.id);
+                            setManualFirstPair(ch.firstPair);
+                            setManualSecondPair(ch.secondPair);
+                            setManualWinnerModalOpen(true);
+                          }}
+                          sx={{
+                            textTransform: 'none',
+                            mt:1,
+                            borderColor:'#2196f3',
+                            color:'#2196f3'
+                          }}
+                        >
+                          Determinar ganador manualmente
+                        </Button>
+                      </Box>
+                    )}
+
                     {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) && currentCycle && ch.cycleNumber === currentCycleNumber && nextMatchDate && (
                       <Box sx={{ mt: 1 }}>
                         {lastMatch && (
@@ -858,29 +1045,33 @@ const MatchInfo = () => {
                             Último resultado del ciclo: {lastMatch.winner} ganaron contra {lastMatch.loser} el {dayjs(lastMatch.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}
                           </Typography>
                         )}
-                        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Próximo partido:</Typography>
-                        <Typography variant="body2">
-                          {nextMatchPairs}
-                        </Typography>
-                        <Typography variant="body2">
-                          Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong>
-                        </Typography>
-                        {nextMatchHour && (
-                          <Typography variant="body2">
-                            Hora: <strong>{nextMatchHour}</strong>
-                          </Typography>
+                        {nextMatchDate && !ch.endDate && (
+                          <>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Próximo partido:</Typography>
+                            <Typography variant="body2">
+                              {nextMatchPairs}
+                            </Typography>
+                            <Typography variant="body2">
+                              Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong>
+                            </Typography>
+                            {nextMatchHour && (
+                              <Typography variant="body2">
+                                Hora: <strong>{nextMatchHour}</strong>
+                              </Typography>
+                            )}
+                            <Typography variant="body2">
+                              Lugar: <strong>Passing Padel</strong>
+                            </Typography>
+                          </>
                         )}
-                        <Typography variant="body2">
-                          Lugar: <strong>Passing Padel</strong>
-                        </Typography>
                       </Box>
                     )}
                   </Box>
                 );
               })}
-              {cycleHistory.length > cyclesPerPage && (
+              {sortedCycles.length > cyclesPerPage && (
                 <Pagination
-                  count={Math.ceil(cycleHistory.length / cyclesPerPage)}
+                  count={Math.ceil(sortedCycles.length / cyclesPerPage)}
                   page={cyclesCurrentPage}
                   onChange={(e, value) => setCyclesCurrentPage(value)}
                   sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
@@ -909,6 +1100,37 @@ const MatchInfo = () => {
           Volver a la pantalla principal
         </Button>
       </Box>
+
+      <Modal open={manualWinnerModalOpen} onClose={() => setManualWinnerModalOpen(false)}>
+        <Box sx={styleModal}>
+          <IconButton
+            sx={{ position: 'absolute', top: 5, right: 5, color: 'red' }}
+            onClick={() => setManualWinnerModalOpen(false)}
+          >
+            <CloseIcon />
+          </IconButton>
+          <Typography variant="h6">Seleccionar Ganador del Ciclo</Typography>
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Elige la pareja ganadora:
+          </Typography>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Pareja Ganadora</InputLabel>
+            <Select
+              value={manualWinnerPair}
+              onChange={(e) => setManualWinnerPair(e.target.value)}
+              label="Pareja Ganadora"
+            >
+              <MenuItem value={manualFirstPair}>{manualFirstPair}</MenuItem>
+              <MenuItem value={manualSecondPair}>{manualSecondPair}</MenuItem>
+            </Select>
+          </FormControl>
+          <Box sx={{ textAlign:'right', mt:2 }}>
+            <Button variant="contained" onClick={handleManualWinnerSave}>
+              Guardar
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
     </Container>
   );
 };
