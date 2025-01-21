@@ -116,9 +116,11 @@ const MatchInfo = () => {
     }
   };
 
+  // *** FUNCIÓN CORREGIDA ***
   const handleCycleAutoClose = async (cycle, cycleMatches) => {
     if (!cycle || cycle.endDate) return;
 
+    // Condición 1: Se han jugado dos partidos con el mismo ganador
     if (cycleMatches.length >= 2) {
       const firstMatch = cycleMatches[0];
       const secondMatch = cycleMatches[1];
@@ -130,7 +132,20 @@ const MatchInfo = () => {
           await updateDoc(cycleRef, {
             endDate: secondMatchDate.format('YYYY-MM-DD')
           });
+          return; // Cerramos el ciclo si cumplen esta condición y salimos
         }
+      }
+    }
+
+    // Condición 2: Se han jugado tres partidos en total, independientemente de quién haya ganado
+    if (cycleMatches.length >= 3) {
+      const thirdMatch = cycleMatches[2];
+      if (thirdMatch && thirdMatch.winner) {
+        const thirdMatchDate = dayjs(thirdMatch.date);
+        const cycleRef = doc(db, 'cycles', cycle.id);
+        await updateDoc(cycleRef, {
+          endDate: thirdMatchDate.format('YYYY-MM-DD')
+        });
       }
     }
   };
