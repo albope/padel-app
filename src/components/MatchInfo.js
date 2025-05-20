@@ -1,1351 +1,1031 @@
 // MatchInfo.js
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Container,
-  Typography,
-  Box,
-  Button,
-  IconButton,
-  Tooltip,
-  Modal,
-  TextField,
-  Paper,
-  Grid,
-  Divider,
-  TableBody,
-  TableRow,
-  TableCell,
-  Pagination,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  LinearProgress
+  Container, Typography, Box, Button, IconButton, Tooltip, Modal,
+  TextField, Paper, Grid, Divider, TableBody, TableRow, TableCell,
+  Pagination, Select, MenuItem, FormControl, InputLabel, LinearProgress,
+  CircularProgress, Alert
 } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
-import { collection, getDocs, addDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isBetween from 'dayjs/plugin/isBetween';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+
+
+// Importa los servicios de Firebase
+import * as firebaseService from '../services/firebaseService';
 
 dayjs.locale('es');
+dayjs.extend(isoWeek);
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isBetween);
+dayjs.extend(advancedFormat);
 
-const styleModal = {
+// --- Constantes ---
+const AVAILABLE_PLAYERS = ['Lucas', 'Bort', 'Martin', 'Ricardo'];
+const CYCLES_PER_PAGE = 3;
+const PADEL_LOCATION = "Passing Padel";
+const PADEL_PHONE = "722 18 91 91";
+const MAP_IFRAME_SRC = "https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed";
+
+const MODAL_STYLE = {
   position: 'absolute',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  bgcolor: 'white',
+  bgcolor: 'background.paper',
   p: 4,
-  width: 300,
+  width: { xs: '90%', sm: 400 },
   borderRadius: '8px',
-  position: 'relative'
+  boxShadow: 24,
 };
 
-const availablePlayers = ['Lucas', 'Bort', 'Martin', 'Ricardo'];
-
-// Cantidad de ciclos por página en el historial:
-const cyclesPerPage = 3;
-
-// Ordena los nombres de la pareja alfabéticamente para normalizarlos
+// --- Funciones de Utilidad ---
 const getPairIdentifier = (pairString) => {
-  const players = pairString.split('&').map(p => p.trim()).sort();
+  if (!pairString || typeof pairString !== 'string') return '';
+  const players = pairString.split(/\s*(?:&|vs|y)\s*/i).map(p => p.trim()).filter(Boolean).sort();
   return players.join(' & ');
 };
+
+const getInitialNewCyclePairStates = () => ({
+  pair1Player1: '', pair1Player2: '',
+  pair2Player1: '', pair2Player2: '',
+});
+
 
 const MatchInfo = () => {
   const navigate = useNavigate();
 
-  const calendarLinkMonday = `https://www.google.com/calendar/render?action=TEMPLATE&text=Partida%20de%20Padel%20-%20Lunes&dates=20241209T180000Z/20241209T193000Z&details=Partida%20de%20padel&location=Passing%20Padel&recur=RRULE:FREQ=WEEKLY;BYDAY=MO`;
-  const calendarLinkThursday = `https://www.google.com/calendar/render?action=TEMPLATE&text=Partida%20de%20Padel%20-%20Jueves&dates=20241212T173000Z/20241212T190000Z&details=Partida%20de%20padel&location=Passing%20Padel&recur=RRULE:FREQ=WEEKLY;BYDAY=TH`;
-
-  // Inicializar calendario en el mes y año actual
-  const [viewYear, setViewYear] = useState(dayjs().year());
-  const [viewMonth, setViewMonth] = useState(dayjs().month());
-
+  // --- Estados ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [userMessage, setUserMessage] = useState({ type: '', text: '' });
   const [cycles, setCycles] = useState([]);
-  const [currentCycle, setCurrentCycle] = useState(null);
   const [noMatchDays, setNoMatchDays] = useState([]);
   const [results, setResults] = useState([]);
-
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [noMatchReason, setNoMatchReason] = useState('');
-
-  const [nextMatchInfo, setNextMatchInfo] = useState('');
-  const [nextMatchDate, setNextMatchDate] = useState(null);
-  const [nextMatchPairs, setNextMatchPairs] = useState('');
+  const [viewDate, setViewDate] = useState(dayjs());
+  const [currentCycle, setCurrentCycle] = useState(null);
   const [currentCycleNumber, setCurrentCycleNumber] = useState(0);
-  const [previousNoMatchMessage, setPreviousNoMatchMessage] = useState('');
-
-  // Para configurar nuevo ciclo
-  const [pair1Player1, setPair1Player1] = useState('');
-  const [pair1Player2, setPair1Player2] = useState('');
-  const [pair2Player1, setPair2Player1] = useState('');
-  const [pair2Player2, setPair2Player2] = useState('');
-
-  // Paginación de ciclos
+  const [nextMatchDetails, setNextMatchDetails] = useState({
+    date: null, pairsText: '', infoText: '', previousNoMatchMessage: '', hour: '',
+  });
+  const [noMatchModal, setNoMatchModal] = useState({ open: false, selectedDay: null, reason: '' });
+  const [manualWinnerModal, setManualWinnerModal] = useState({
+    open: false, cycle: null, winnerPair: '', firstPair: '', secondPair: ''
+  });
+  const [newCyclePairs, setNewCyclePairs] = useState(getInitialNewCyclePairStates());
   const [cyclesCurrentPage, setCyclesCurrentPage] = useState(1);
 
-  // Modal "determinar ganador manual"
-  const [manualWinnerModalOpen, setManualWinnerModalOpen] = useState(false);
-  const [manualWinnerPair, setManualWinnerPair] = useState('');
-  const [manualWinnerCycle, setManualWinnerCycle] = useState(null);
-  const [manualFirstPair, setManualFirstPair] = useState('');
-  const [manualSecondPair, setManualSecondPair] = useState('');
+  // --- Lógica de Carga y Procesamiento de Datos ---
+  const processFetchedData = useCallback((fetchedCycles, fetchedNoMatchDays, fetchedResults) => {
+    const sortedCycles = [...fetchedCycles].sort((a, b) => dayjs(a.startDate).diff(dayjs(b.startDate)))
+      .map(c => ({
+        ...c,
+        currentPairs: c.currentPairs ? c.currentPairs.replace(/\sy\s/gi, ' & ') : '',
+      }));
 
-  // ---------------------------
-  //  Funciones de ayuda
-  // ---------------------------
-  const recalculateCycleForResults = (loadedCycles, loadedResults) => {
-    for (const r of loadedResults) {
-      r.cycleId = null;
-      const resultDate = dayjs(r.date);
-      for (const c of loadedCycles) {
-        const start = dayjs(c.startDate);
-        const end = c.endDate ? dayjs(c.endDate) : null;
-        if (end) {
-          if (
-            (resultDate.isSame(start, 'day') || resultDate.isAfter(start)) &&
-            (resultDate.isBefore(end, 'day') || resultDate.isSame(end, 'day'))
-          ) {
-            r.cycleId = c.id;
-            break;
-          }
-        } else {
-          if (resultDate.isSame(start, 'day') || resultDate.isAfter(start)) {
-            r.cycleId = c.id;
-            break;
-          }
-        }
-      }
-    }
-  };
-
-  const handleCycleAutoClose = async (cycle, cycleMatches) => {
-    if (!cycle || cycle.endDate) return;
-
-    // Condición 1: 2 partidos ganados por la misma pareja
-    if (cycleMatches.length >= 2) {
-      const firstMatch = cycleMatches[0];
-      const secondMatch = cycleMatches[1];
-      if (firstMatch && secondMatch && firstMatch.winner && secondMatch.winner) {
-        if (firstMatch.winner === secondMatch.winner) {
-          const secondMatchDate = dayjs(secondMatch.date);
-          const cycleRef = doc(db, 'cycles', cycle.id);
-          await updateDoc(cycleRef, {
-            endDate: secondMatchDate.format('YYYY-MM-DD')
-          });
-          return;
-        }
-      }
-    }
-
-    // Condición 2: 3 partidos en total, sin importar ganador
-    if (cycleMatches.length >= 3) {
-      const thirdMatch = cycleMatches[2];
-      if (thirdMatch && thirdMatch.winner) {
-        const thirdMatchDate = dayjs(thirdMatch.date);
-        const cycleRef = doc(db, 'cycles', cycle.id);
-        await updateDoc(cycleRef, {
-          endDate: thirdMatchDate.format('YYYY-MM-DD')
+    let processedResults = fetchedResults.map(r => {
+      let p1Sets = 0, p2Sets = 0;
+      if (r.sets?.length) {
+        r.sets.forEach(s => {
+          const score1 = parseInt(s.pair1Score, 10);
+          const score2 = parseInt(s.pair2Score, 10);
+          if (score1 > score2) p1Sets++;
+          else if (score2 > score1) p2Sets++;
         });
       }
-    }
-  };
+      const p1Name = getPairIdentifier(`${r.pair1?.player1 || ''} & ${r.pair1?.player2 || ''}`);
+      const p2Name = getPairIdentifier(`${r.pair2?.player1 || ''} & ${r.pair2?.player2 || ''}`);
+      let winner = '', loser = '';
+      if (p1Sets > p2Sets) { winner = p1Name; loser = p2Name; }
+      else if (p2Sets > p1Sets) { winner = p2Name; loser = p1Name; }
 
-  // Aquí ordenamos los resultados de cada ciclo en DESCENDENTE
-  const recalculateMatchNumbers = async (loadedCycles, loadedResults) => {
-    for (const c of loadedCycles) {
-      // Orden descendente por fecha
-      const cycleMatches = loadedResults
-        .filter(m => m.cycleId === c.id && m.winner && m.loser)
-        .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
-
-      // Ajustamos su "matchNumberInCycle"
-      cycleMatches.forEach((m, i) => {
-        m.matchNumberInCycle = i + 1;
-      });
-
-      await handleCycleAutoClose(c, cycleMatches);
-    }
-  };
-
-  // Calcula fecha siguiente partido
-  const updateNextMatch = (current, loadedCycles, loadedResults, loadedNoMatch) => {
-    // Partidos jugados de este ciclo
-    const cycleResults = loadedResults
-      .filter(m => m.cycleId === current.id && m.winner && m.loser)
-      .sort((a, b) => dayjs(a.date).diff(dayjs(b.date))); // Este orden aquí no afecta a la UI
-
-    let lastMatchDate = null;
-    cycleResults.forEach(m => {
-      const d = dayjs(m.date, 'YYYY-MM-DD');
-      if (!lastMatchDate || d.isAfter(lastMatchDate)) {
-        lastMatchDate = d;
+      let cycleIdForResult = null;
+      const resultDate = dayjs(r.date);
+      for (const cycle of sortedCycles) {
+        const start = dayjs(cycle.startDate);
+        const end = cycle.endDate ? dayjs(cycle.endDate) : null;
+        if ((resultDate.isSame(start, 'day') || resultDate.isAfter(start)) &&
+          (!end || resultDate.isBefore(end, 'day') || resultDate.isSame(end, 'day'))) {
+          cycleIdForResult = cycle.id;
+          break;
+        }
       }
+      return { ...r, winner, loser, cycleId: cycleIdForResult };
     });
 
-    let firstPair = '', secondPair = '';
-    let fWins = 0, sWins = 0;
-    if (current.currentPairs) {
-      const cp = current.currentPairs.replace(/\sy\s/gi, ' & ');
-      const pairs = cp.split('vs').map(p => p.trim());
-      firstPair = getPairIdentifier(pairs[0]);
-      secondPair = getPairIdentifier(pairs[1]);
-      fWins = cycleResults.filter(m => m.winner === firstPair).length;
-      sWins = cycleResults.filter(m => m.winner === secondPair).length;
-    }
+    sortedCycles.forEach(c => {
+      const cycleMatches = processedResults
+        .filter(m => m.cycleId === c.id && m.winner && m.loser)
+        .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
+      cycleMatches.forEach((m, i) => { m.matchNumberInCycle = i + 1; });
+    });
 
-    // Si ya hay 2 partidos y la misma pareja ganó ambos
-    if (cycleResults.length === 2) {
-      if (fWins === 2 || sWins === 2) {
-        setNextMatchDate(null);
-        setPreviousNoMatchMessage('El ciclo ha finalizado después de dos partidos.');
-        return;
+    return { finalCycles: sortedCycles, finalResults: processedResults, finalNoMatchDays: fetchedNoMatchDays };
+  }, []);
+
+  const determineCurrentCycleAndNextMatch = useCallback((processedCycles) => {
+    const now = dayjs();
+    let activeCycle = null;
+    let activeCycleNum = 0;
+    for (let i = 0; i < processedCycles.length; i++) {
+      const c = processedCycles[i];
+      if (!c.endDate || dayjs(c.endDate).isAfter(now)) {
+        activeCycle = c;
+        activeCycleNum = i + 1;
+        break;
       }
     }
+    setCurrentCycle(activeCycle);
+    setCurrentCycleNumber(activeCycleNum);
+  }, []);
 
-    // Determinamos una fecha base para buscar el próximo lunes o jueves
-    let referenceDate;
-    if (!lastMatchDate || lastMatchDate.isBefore(dayjs())) {
-      const startDateObj = dayjs(current.startDate);
-      referenceDate = dayjs().isAfter(startDateObj) ? dayjs() : startDateObj;
-    } else {
-      referenceDate = lastMatchDate;
+  const loadAllData = useCallback(async (calledByUserAction = false) => {
+    if (!calledByUserAction) setIsLoading(true);
+    setError(null);
+    if (calledByUserAction) setUserMessage({ type: '', text: '' });
+
+    try {
+      const { cycles: fetchedCycles, noMatchDays: fetchedNoMatch, results: fetchedResults } = await firebaseService.getAllMatchData();
+      let { finalCycles, finalResults, finalNoMatchDays } = processFetchedData(fetchedCycles, fetchedNoMatch, fetchedResults);
+      let cyclesWereUpdated = false;
+
+      for (const cycle of finalCycles) {
+        if (cycle.endDate) continue;
+        const cycleMatchesChronological = finalResults
+          .filter(m => m.cycleId === cycle.id && m.winner && m.loser)
+          .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+
+        if (cycleMatchesChronological.length >= 2) {
+          const firstPairName = cycle.currentPairs ? getPairIdentifier(cycle.currentPairs.split("vs")[0]) : null;
+          const secondPairName = cycle.currentPairs ? getPairIdentifier(cycle.currentPairs.split("vs")[1]) : null;
+          if (firstPairName && secondPairName) {
+            const firstPairWins = cycleMatchesChronological.filter(m => m.winner === firstPairName).length;
+            const secondPairWins = cycleMatchesChronological.filter(m => m.winner === secondPairName).length;
+            if (firstPairWins >= 2 || secondPairWins >= 2) {
+              const winningMatches = firstPairWins >= 2 ?
+                cycleMatchesChronological.filter(m => m.winner === firstPairName) :
+                cycleMatchesChronological.filter(m => m.winner === secondPairName);
+              if (winningMatches.length >= 2) {
+                const closingMatchDate = dayjs(winningMatches[1].date).format('YYYY-MM-DD');
+                if (cycle.endDate !== closingMatchDate) {
+                  await firebaseService.updateCycle(cycle.id, { endDate: closingMatchDate });
+                  cycle.endDate = closingMatchDate;
+                  cyclesWereUpdated = true;
+                }
+                continue;
+              }
+            }
+          }
+        }
+        if (!cycle.endDate && cycleMatchesChronological.length >= 3) {
+          const thirdMatch = cycleMatchesChronological[2];
+          if (thirdMatch?.winner) {
+            const closingMatchDate = dayjs(thirdMatch.date).format('YYYY-MM-DD');
+            if (cycle.endDate !== closingMatchDate) {
+              await firebaseService.updateCycle(cycle.id, { endDate: closingMatchDate });
+              cycle.endDate = closingMatchDate;
+              cyclesWereUpdated = true;
+            }
+          }
+        }
+      }
+
+      setCycles(cyclesWereUpdated ? [...finalCycles] : finalCycles);
+      setResults(finalResults);
+      setNoMatchDays(finalNoMatchDays);
+
+    } catch (err) {
+      console.error("Error loading data:", err);
+      setError("Error al cargar los datos. Por favor, inténtalo de nuevo más tarde.");
+    } finally {
+      if (!calledByUserAction) setIsLoading(false);
+    }
+  }, [processFetchedData]);
+
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      determineCurrentCycleAndNextMatch(cycles, results, noMatchDays);
+    }
+  }, [cycles, results, noMatchDays, isLoading, determineCurrentCycleAndNextMatch]);
+
+  const updateNextMatchDisplayLogic = useCallback((activeCycle, allCycles, allResultsData, allNoMatchData) => {
+    if (!activeCycle) return;
+
+    if (activeCycle.endDate && dayjs(activeCycle.endDate).isBefore(dayjs())) {
+      setNextMatchDetails(prev => ({
+        ...prev, date: null,
+        infoText: `${currentCycleNumber}º ciclo (Finalizado el ${dayjs(activeCycle.endDate).format('DD/MM/YYYY')})`,
+        previousNoMatchMessage: 'El ciclo ha finalizado.', hour: ''
+      }));
+      return;
     }
 
+    const cycleResultsData = allResultsData
+      .filter(m => m.cycleId === activeCycle.id && m.winner && m.loser)
+      .sort((a, b) => dayjs(a.date).diff(dayjs(b.date)));
+
+    let fWins = 0, sWins = 0;
+    if (activeCycle.currentPairs) {
+      const pairs = activeCycle.currentPairs.split('vs').map(p => getPairIdentifier(p.trim()));
+      if (pairs.length === 2) {
+        fWins = cycleResultsData.filter(m => m.winner === pairs[0]).length;
+        sWins = cycleResultsData.filter(m => m.winner === pairs[1]).length;
+      }
+    }
+    if (((fWins >= 2 || sWins >= 2) && cycleResultsData.length >= 2) || cycleResultsData.length >= 3) {
+      const message = cycleResultsData.length >= 3 ? 'El ciclo actual ha finalizado (3 partidos).' : 'El ciclo actual ha finalizado (2 victorias).';
+      setNextMatchDetails(prev => ({ ...prev, date: null, previousNoMatchMessage: message, hour: '', infoText: prev.infoText }));
+      return;
+    }
+
+    let lastMatchDateInCycle = cycleResultsData.length > 0 ? dayjs(cycleResultsData[cycleResultsData.length - 1].date) : null;
+
+    let searchStartDate = dayjs(activeCycle.startDate);
+    if (lastMatchDateInCycle) {
+      searchStartDate = lastMatchDateInCycle.add(1, 'day');
+    }
+    if (searchStartDate.isBefore(dayjs(), 'day')) {
+      searchStartDate = dayjs();
+    }
+
+    let referenceDateForLoop = searchStartDate.clone().subtract(1, 'day');
+
     let validDateFound = null;
-    for (let i = 1; i <= 60; i++) {
-      referenceDate = referenceDate.add(1, 'day');
-      const dow = referenceDate.day();
+    for (let i = 0; i < 90; i++) {
+      referenceDateForLoop = referenceDateForLoop.add(1, 'day');
+      const dow = referenceDateForLoop.day();
       if (dow === 1 || dow === 4) {
-        const nm = loadedNoMatch.find(n =>
-          dayjs(n.date, 'YYYY-MM-DD').isSame(referenceDate, 'day')
-        );
-        // Que la fecha no sea “sin partido” y sea posterior a hoy
-        if (!nm && referenceDate.isAfter(dayjs())) {
-          validDateFound = referenceDate;
+        const isNoMatch = allNoMatchData.some(n => dayjs(n.date, 'YYYY-MM-DD').isSame(referenceDateForLoop, 'day'));
+        if (!isNoMatch) {
+          validDateFound = referenceDateForLoop;
           break;
         }
       }
     }
 
     if (!validDateFound) {
-      setNextMatchDate(null);
-      setNextMatchPairs('');
-      setPreviousNoMatchMessage('No hay partidos programados');
+      setNextMatchDetails(prev => ({ ...prev, date: null, pairsText: activeCycle.currentPairs || "Parejas por definir", previousNoMatchMessage: 'No se encontró próximo partido para el ciclo actual en los próximos 3 meses.', hour: '', infoText: `Ciclo ${currentCycleNumber}º en curso.` }));
       return;
     }
 
-    setNextMatchDate(validDateFound);
-
-    const pairsText = current.currentPairs
-      ? current.currentPairs
-      : "Martin & Bort vs Lucas & Ricardo";
-    setNextMatchPairs(pairsText);
-
-    // Avisar si hubo un día sin partido inmediatamente anterior
-    const recentNoMatch = loadedNoMatch.filter(n =>
-      dayjs(n.date, 'YYYY-MM-DD').isBefore(validDateFound)
-    );
-    if (recentNoMatch.length > 0) {
-      const lastNoMatch = recentNoMatch.sort((a, b) =>
-        dayjs(b.date).diff(dayjs(a.date))
-      )[0];
-      const reasonText = lastNoMatch.reason
-        ? ` (motivo: ${lastNoMatch.reason})`
-        : '';
-      setPreviousNoMatchMessage(
-        `El partido del ${dayjs(lastNoMatch.date).format('DD/MM')} no se jugó${reasonText}. Próximo partido: ${validDateFound.format('DD/MM/YYYY')}`
-      );
-    } else {
-      setPreviousNoMatchMessage('');
-    }
-  };
-
-  const calculateCycleProgress = (current, loadedResults) => {
-    if (!current) return 0;
-    const cycleMatches = loadedResults.filter(m => m.cycleId === current.id && m.winner && m.loser);
-    return cycleMatches.length;
-  };
-
-  // Cargar datos de Firebase
-  const loadData = async () => {
-    const cyclesSnap = await getDocs(collection(db, 'cycles'));
-    const loadedCycles = [];
-    cyclesSnap.forEach(docu => {
-      loadedCycles.push({ id: docu.id, ...docu.data() });
-    });
-    // Ordenar por fecha de inicio asc
-    loadedCycles.sort((a, b) => dayjs(a.startDate).diff(dayjs(b.startDate)));
-    // Normalizar las parejas
-    for (const c of loadedCycles) {
-      if (c.currentPairs) {
-        c.currentPairs = c.currentPairs.replace(/\sy\s/gi, ' & ');
-      }
-    }
-    setCycles(loadedCycles);
-
-    // Determinar ciclo actual
-    const now = dayjs();
-    let current = null;
-    let cycleNum = 0;
-    for (let i = 0; i < loadedCycles.length; i++) {
-      const c = loadedCycles[i];
-      cycleNum = i + 1;
-      if (!c.endDate || dayjs(c.endDate).isAfter(now)) {
-        current = c;
+    let msg = '';
+    for (let i = 1; i <= 3; i++) {
+      const checkDate = validDateFound.subtract(i, 'day');
+      const prevNoMatchDay = allNoMatchData.find(n => dayjs(n.date).isSame(checkDate, 'day'));
+      if (prevNoMatchDay) {
+        msg = `Hubo un día sin partido el ${dayjs(prevNoMatchDay.date).format('DD/MM')}${prevNoMatchDay.reason ? ' (' + prevNoMatchDay.reason + ')' : ''}. `;
         break;
       }
     }
-    // Si ninguno está activo, tomar el último
-    if (!current && loadedCycles.length > 0) {
-      current = loadedCycles[loadedCycles.length - 1];
-      cycleNum = loadedCycles.length;
-    }
-    setCurrentCycle(current);
-    setCurrentCycleNumber(cycleNum);
 
-    // noMatchDays
-    const noMatchSnap = await getDocs(collection(db, 'noMatchDays'));
-    const loadedNoMatch = [];
-    noMatchSnap.forEach(docu => {
-      loadedNoMatch.push({ id: docu.id, ...docu.data() });
-    });
-    setNoMatchDays(loadedNoMatch);
+    setNextMatchDetails(prev => ({
+      ...prev,
+      date: validDateFound,
+      pairsText: activeCycle.currentPairs || "Parejas por definir",
+      previousNoMatchMessage: msg,
+      hour: validDateFound.day() === 1 ? '20:00' : '19:30',
+      infoText: `Ciclo ${currentCycleNumber}º en curso. (${allCycles.length} ciclos en total)`
+    }));
 
-    // results
-    const resultsSnap = await getDocs(collection(db, 'results'));
-    let loadedResults = [];
-    resultsSnap.forEach(docu => {
-      const r = docu.data();
-      let pair1SetsWon = 0;
-      let pair2SetsWon = 0;
-      if (r.sets && r.sets.length > 0) {
-        r.sets.forEach(s => {
-          const p1Score = parseInt(s.pair1Score, 10);
-          const p2Score = parseInt(s.pair2Score, 10);
-          if (p1Score > p2Score) pair1SetsWon++;
-          else if (p2Score > p1Score) pair2SetsWon++;
-        });
-      }
-
-      const p1Name = getPairIdentifier(`${r.pair1.player1} & ${r.pair1.player2}`);
-      const p2Name = getPairIdentifier(`${r.pair2.player1} & ${r.pair2.player2}`);
-
-      let winner = '', loser = '';
-      if (pair1SetsWon > pair2SetsWon) {
-        winner = p1Name;
-        loser = p2Name;
-      } else if (pair2SetsWon > pair1SetsWon) {
-        winner = p2Name;
-        loser = p1Name;
-      }
-
-      loadedResults.push({
-        id: docu.id,
-        ...r,
-        winner,
-        loser
-      });
-    });
-
-    // Recalcular a qué ciclo pertenece cada resultado
-    await recalculateCycleForResults(loadedCycles, loadedResults);
-    // Reordenar y comprobar cierres automáticos
-    await recalculateMatchNumbers(loadedCycles, loadedResults);
-
-    setResults(loadedResults);
-
-    // Actualizar info de "próximo partido" si hay ciclo actual
-    if (current) {
-      updateNextMatch(current, loadedCycles, loadedResults, loadedNoMatch);
-      setNextMatchInfo(`${loadedCycles.length}º ciclo disputado`);
-    } else {
-      setNextMatchInfo('');
-      setNextMatchDate(null);
-      setNextMatchPairs('');
-      setPreviousNoMatchMessage('');
-    }
-  };
+  }, [currentCycleNumber]);
 
   useEffect(() => {
-    loadData();
-    // eslint-disable-next-line
-  }, []);
+    if (currentCycle && !isLoading) {
+      updateNextMatchDisplayLogic(currentCycle, cycles, results, noMatchDays);
+    } else if (!currentCycle && !isLoading) {
+      const baseInfoText = cycles.length > 0 ? 'Todos los ciclos han finalizado.' : 'No hay ciclos registrados.';
+      const basePrevMsg = cycles.length > 0 ? 'Puede configurar un nuevo ciclo.' : 'Configure el primer ciclo.';
+      setNextMatchDetails({ date: null, pairsText: '', infoText: baseInfoText, previousNoMatchMessage: basePrevMsg, hour: '' });
+    }
+  }, [currentCycle, cycles, results, noMatchDays, isLoading, updateNextMatchDisplayLogic]);
 
-  // ---------------------------
-  //  Días sin partido
-  // ---------------------------
+  // --- Manejadores de Eventos ---
+  const handleModalClose = (modalSetter) => {
+    modalSetter(prev => ({ ...prev, open: false, selectedDay: null, reason: '', cycle: null, winnerPair: '' }));
+  };
+
   const handleNoMatchSave = async () => {
-    if (!selectedDay) return;
-    const dateStr = selectedDay.format('YYYY-MM-DD');
-    await addDoc(collection(db, 'noMatchDays'), {
-      date: dateStr,
-      reason: noMatchReason || '',
-      noMatch: true
-    });
-    setModalOpen(false);
-    setNoMatchReason('');
-    setSelectedDay(null);
-    loadData();
-  };
-
-  // Eliminar un "noMatchDay" si nos hemos equivocado
-  const handleNoMatchDelete = async (d) => {
-    const found = noMatchDays.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(d, 'day'));
-    if (found) {
-      await deleteDoc(doc(db, 'noMatchDays', found.id));
-      loadData();
+    if (!noMatchModal.selectedDay) return;
+    const dateStr = noMatchModal.selectedDay.format('YYYY-MM-DD');
+    setIsLoading(true);
+    try {
+      await firebaseService.addNoMatchDay({ date: dateStr, reason: noMatchModal.reason || '', noMatch: true });
+      setUserMessage({ type: 'success', text: 'Día sin partido guardado.' });
+      handleModalClose(setNoMatchModal);
+      await loadAllData(true);
+    } catch (err) {
+      console.error("Error saving no match day:", err);
+      setUserMessage({ type: 'error', text: 'Error al guardar día sin partido.' });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // ---------------------------
-  //  Calendario
-  // ---------------------------
-  const handlePrevMonth = () => {
-    let newMonth = viewMonth - 1;
-    let newYear = viewYear;
-    if (newMonth < 0) {
-      newMonth = 11;
-      newYear -= 1;
-    }
-    setViewMonth(newMonth);
-    setViewYear(newYear);
-  };
-
-  const handleNextMonth = () => {
-    let newMonth = viewMonth + 1;
-    let newYear = viewYear;
-    if (newMonth > 11) {
-      newMonth = 0;
-      newYear += 1;
-    }
-    setViewMonth(newMonth);
-    setViewYear(newYear);
-  };
-
-  const getSetsString = (sets) => {
-    if (!sets) return '';
-    return sets.map(s => `${s.pair1Score}-${s.pair2Score}`).join(', ');
-  };
-
-  const getMatchTooltip = (match) => {
-    const setsDetail = getSetsString(match.sets);
-    const matchOrdinalText = match.matchNumberInCycle
-      ? `${match.matchNumberInCycle}º partido del ciclo`
-      : '';
-    return `${match.winner} ganaron contra ${match.loser} (${setsDetail}) en ${match.location}. ${matchOrdinalText}.`;
-  };
-
-  // Decidir qué tooltip se muestra: “marcar” o “desmarcar”
-  const renderTooltipContent = (ds, d) => {
-    if (ds.type === 'noMatch') {
-      return (
-        <Box>
-          <Typography variant="body2">{ds.tooltip}</Typography>
-          <Button
-            variant="text"
-            sx={{ mt: 1, textTransform: 'none' }}
-            onClick={() => handleNoMatchDelete(d)}
-          >
-            Desmarcar día sin partido
-          </Button>
-        </Box>
-      );
-    } else {
-      return (
-        <Box>
-          <Typography variant="body2">{ds.tooltip}</Typography>
-          <Button
-            variant="text"
-            sx={{ mt: 1, textTransform: 'none' }}
-            onClick={() => {
-              setSelectedDay(d);
-              setModalOpen(true);
-            }}
-          >
-            Marcar día sin partido
-          </Button>
-        </Box>
-      );
+  const handleNoMatchDelete = async (dayToDelete) => {
+    const found = noMatchDays.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(dayToDelete, 'day'));
+    if (found?.id) {
+      setIsLoading(true);
+      try {
+        await firebaseService.deleteNoMatchDay(found.id);
+        setUserMessage({ type: 'success', text: 'Día sin partido eliminado.' });
+        await loadAllData(true);
+      } catch (err) {
+        console.error("Error deleting no match day:", err);
+        setUserMessage({ type: 'error', text: 'Error al eliminar día sin partido.' });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
-
-  // Determina el estilo de la celda en el calendario
-  const getDayStyle = (d) => {
-    const nm = noMatchDays.find(n => dayjs(n.date, 'YYYY-MM-DD').isSame(d, 'day'));
-    if (nm) {
-      return {
-        type: 'noMatch',
-        tooltip: `Día sin partido${nm.reason ? ' (motivo: ' + nm.reason + ')' : ''}`
-      };
-    }
-
-    const dayResult = results.filter(m => m.date === d.format('YYYY-MM-DD') && m.winner && m.loser);
-    if (dayResult && dayResult.length > 0) {
-      const match = dayResult[0];
-      const tooltip = getMatchTooltip(match);
-      return { type: 'played', winner: match.winner, loser: match.loser, tooltip };
-    }
-
-    const dow = d.day();
-    if (dow === 1 || dow === 4) {
-      return { type: 'scheduled', tooltip: 'Partido programado' };
-    }
-
-    return { type: 'empty', tooltip: 'Sin evento' };
-  };
-
-  // Iniciales de la pareja (ej: "Martin & Bort" -> "M&B")
-  const getInitials = (pairName) => {
-    const names = pairName.split('&').map(s => s.trim());
-    return names.map(n => n.charAt(0)).join('&');
-  };
-
-  // Render de cada celda en la tabla del calendario
-  const renderDayCell = (d) => {
-    const ds = getDayStyle(d);
-    const dayNumber = d.month() === viewMonth ? d.date() : '';
-    let cellContent = null;
-    let cellSx = {
-      cursor: 'pointer',
-      width: '40px',
-      height: '40px',
-      position: 'relative',
-      p: 0
-    };
-
-    if (!dayNumber) {
-      return <TableCell key={d.format()} sx={{ backgroundColor: 'white' }} />;
-    }
-
-    switch (ds.type) {
-      case 'noMatch':
-        cellSx.backgroundColor = 'grey';
-        break;
-      case 'played':
-        cellSx.background = 'linear-gradient(to bottom, green 50%, red 50%)';
-        const wInit = getInitials(ds.winner);
-        const lInit = getInitials(ds.loser);
-        cellContent = (
-          <Box
-            sx={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-              display: 'flex', flexDirection: 'column'
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1, display: 'flex', justifyContent: 'center',
-                alignItems: 'center', color: 'white', fontWeight: 'bold'
-              }}
-            >
-              {wInit}
-            </Box>
-            <Box
-              sx={{
-                flex: 1, display: 'flex', justifyContent: 'center',
-                alignItems: 'center', color: 'white', fontWeight: 'bold'
-              }}
-            >
-              {lInit}
-            </Box>
-          </Box>
-        );
-        break;
-      case 'scheduled':
-        cellSx.backgroundColor = 'lightblue';
-        break;
-      case 'empty':
-      default:
-        cellSx.backgroundColor = 'white';
-        break;
-    }
-
-    return (
-      <Tooltip
-        key={d.format()}
-        title={renderTooltipContent(ds, d)}
-        enterTouchDelay={50}
-        leaveTouchDelay={3000}
-      >
-        <TableCell align="center" sx={cellSx}>
-          {dayNumber}
-          {cellContent}
-        </TableCell>
-      </Tooltip>
-    );
-  };
-
-  // ---------------------------
-  //  Configurar nuevo ciclo
-  // ---------------------------
-  let showPairSelection = false;
-  if (!currentCycle) {
-    showPairSelection = true;
-  } else {
-    const cycleMatches = results.filter(m => m.cycleId === currentCycle.id && m.winner && m.loser);
-    // Si ya hay 3 partidos o si el ciclo tiene endDate => permitir armar uno nuevo
-    if (cycleMatches.length === 3 || (currentCycle.endDate && cycleMatches.length >= 1)) {
-      showPairSelection = true;
-    }
-  }
 
   const handleSaveNextCycle = async () => {
-    if (!pair1Player1 || !pair1Player2 || !pair2Player1 || !pair2Player2) return;
+    const { pair1Player1, pair1Player2, pair2Player1, pair2Player2 } = newCyclePairs;
+    if (!pair1Player1 || !pair1Player2 || !pair2Player1 || !pair2Player2) {
+      setUserMessage({ type: 'error', text: 'Todos los jugadores deben ser seleccionados.' });
+      return;
+    }
     const chosen = [pair1Player1, pair1Player2, pair2Player1, pair2Player2];
-    const uniqueChosen = new Set(chosen);
-    if (uniqueChosen.size < 4) {
-      alert('Debes elegir 4 jugadores diferentes.');
+    if (new Set(chosen).size < 4) {
+      setUserMessage({ type: 'error', text: 'Debes elegir 4 jugadores diferentes.' });
       return;
     }
 
     const pairsText = `${pair1Player1} & ${pair1Player2} vs ${pair2Player1} & ${pair2Player2}`;
-    let startDate = dayjs();
+    let newCycleStartDate = dayjs();
     if (cycles.length > 0) {
-      const lastC = cycles[cycles.length - 1];
-      const refDate = lastC.endDate ? dayjs(lastC.endDate) : dayjs();
-      let found = false;
-      let checkDate = refDate;
-      for (let i = 0; i < 60; i++) {
-        checkDate = checkDate.add(1, 'day');
-        const dow = checkDate.day();
-        if (dow === 1 || dow === 4) {
-          startDate = checkDate;
-          found = true;
-          break;
-        }
-      }
-      if (!found) startDate = refDate.add(1, 'day');
-    } else {
-      let d = dayjs();
-      let found = false;
-      for (let i = 0; i < 60; i++) {
-        const dow = d.day();
-        if (dow === 1 || dow === 4) {
-          startDate = d;
-          found = true;
-          break;
-        }
-        d = d.add(1, 'day');
-      }
-      if (!found) startDate = dayjs().add(1, 'day');
+      const lastCycle = cycles[cycles.length - 1];
+      newCycleStartDate = lastCycle.endDate ? dayjs(lastCycle.endDate).add(1, 'day') : dayjs().add(1, 'day');
     }
 
-    await addDoc(collection(db, 'cycles'), {
-      startDate: startDate.format('YYYY-MM-DD'),
-      currentPairs: pairsText
-    });
-    alert('Nuevo ciclo configurado con éxito.');
-    setPair1Player1('');
-    setPair1Player2('');
-    setPair2Player1('');
-    setPair2Player2('');
-    loadData();
+    while (newCycleStartDate.day() !== 1 && newCycleStartDate.day() !== 4) {
+      newCycleStartDate = newCycleStartDate.add(1, 'day');
+    }
+
+    setIsLoading(true);
+    try {
+      await firebaseService.addCycle({ startDate: newCycleStartDate.format('YYYY-MM-DD'), currentPairs: pairsText, endDate: null });
+      setUserMessage({ type: 'success', text: 'Nuevo ciclo configurado con éxito.' });
+      setNewCyclePairs(getInitialNewCyclePairStates());
+      await loadAllData(true);
+    } catch (err) {
+      console.error("Error saving new cycle:", err);
+      setUserMessage({ type: 'error', text: 'Error al configurar nuevo ciclo.' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Anular ciclo actual
   const handleCancelCurrentCycle = async () => {
-    if (!currentCycle) {
-      alert("No hay un ciclo activo para anular.");
+    if (!currentCycle?.id) {
+      setUserMessage({ type: 'error', text: 'No hay un ciclo activo para anular.' });
       return;
     }
-    const confirmDelete = window.confirm(
-      `¿Estás seguro de que deseas anular el ciclo "${currentCycle.currentPairs}"? Esta acción no se puede deshacer.`
-    );
-    if (!confirmDelete) return;
+    if (!window.confirm(`¿Estás seguro de ANULAR el ciclo "${currentCycle.currentPairs}" y TODOS sus partidos? Esta acción no se puede deshacer.`)) return;
 
+    setIsLoading(true);
     try {
-      await deleteDoc(doc(db, 'cycles', currentCycle.id));
-      // Borrar también los resultados asociados
       const associatedResults = results.filter(r => r.cycleId === currentCycle.id);
       for (const result of associatedResults) {
-        await deleteDoc(doc(db, 'results', result.id));
+        if (result.id) await firebaseService.deleteResult(result.id);
       }
-      alert("El ciclo ha sido anulado exitosamente.");
-      loadData();
-    } catch (error) {
-      console.error("Error al anular el ciclo:", error);
-      alert("Ocurrió un error al intentar anular el ciclo. Por favor, inténtalo de nuevo.");
+      await firebaseService.deleteCycle(currentCycle.id);
+      setUserMessage({ type: 'success', text: 'Ciclo anulado exitosamente.' });
+      await loadAllData(true);
+    } catch (err) {
+      console.error("Error cancelling cycle:", err);
+      setUserMessage({ type: 'error', text: 'Error al anular el ciclo.' });
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // Progreso del ciclo actual
-  let cycleProgress = null;
-  if (currentCycle) {
-    const played = calculateCycleProgress(currentCycle, results);
-    cycleProgress = (
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="body2">Progreso del ciclo: {played} de 3 partidos jugados</Typography>
-        <LinearProgress variant="determinate" value={(played / 3) * 100} />
-      </Box>
-    );
-  }
-
-  // Determinar el último ciclo cerrado
-  const closedCycles = cycles.filter(c => c.endDate);
-  let lastClosedCycle = null;
-  let lastClosedCycleWinner = '';
-  if (closedCycles.length > 0) {
-    lastClosedCycle = closedCycles[closedCycles.length - 1];
-    const closedResults = results.filter(m => m.cycleId === lastClosedCycle.id && m.winner && m.loser);
-
-    if (lastClosedCycle.currentPairs) {
-      const cp = lastClosedCycle.currentPairs;
-      const pairs = cp.split('vs').map(p => p.trim());
-      const fPair = getPairIdentifier(pairs[0]);
-      const sPair = getPairIdentifier(pairs[1]);
-
-      const fWins = closedResults.filter(m => m.winner === fPair).length;
-      const sWins = closedResults.filter(m => m.winner === sPair).length;
-
-      if (fWins >= 2) {
-        lastClosedCycleWinner = fPair;
-      } else if (sWins >= 2) {
-        lastClosedCycleWinner = sPair;
-      } else if (fWins === 1 && sWins === 0) {
-        lastClosedCycleWinner = fPair;
-      } else if (sWins === 1 && fWins === 0) {
-        lastClosedCycleWinner = sPair;
-      } else if (closedResults.length === 0) {
-        lastClosedCycleWinner = 'Sin partidos jugados';
-      } else {
-        lastClosedCycleWinner = 'Datos no concluyentes';
-      }
-    } else {
-      lastClosedCycleWinner = 'Datos no concluyentes';
-    }
-  }
-
-  // Historial de ciclos con orden final
-  const cycleHistory = cycles.map((c, i) => {
-    // Partidos en orden descendente
-    const cResults = results
-      .filter(m => m.cycleId === c.id && m.winner && m.loser)
-      .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
-
-    // ** Orden descendente para los días sin partido **
-    const cNoMatches = noMatchDays
-      .filter(n => {
-        const start = dayjs(c.startDate);
-        const end = c.endDate ? dayjs(c.endDate) : null;
-        const nmDate = dayjs(n.date, 'YYYY-MM-DD');
-        if (end) {
-          return (
-            (nmDate.isAfter(start) || nmDate.isSame(start, 'day')) &&
-            (nmDate.isBefore(end, 'day') || nmDate.isSame(end, 'day'))
-          );
-        } else {
-          return nmDate.isAfter(start) || nmDate.isSame(start, 'day');
-        }
-      })
-      .sort((a, b) =>
-        dayjs(b.date, 'YYYY-MM-DD').diff(dayjs(a.date, 'YYYY-MM-DD'))
-      );
-
-    let cycleState = 'En curso';
-    let winnerPairCycle = '';
-
-    const cp = c.currentPairs || '';
-    const pairs = cp ? cp.split('vs').map(p => p.trim()) : [];
-    const fPair = pairs[0] ? getPairIdentifier(pairs[0]) : '';
-    const sPair = pairs[1] ? getPairIdentifier(pairs[1]) : '';
-
-    const fWins = cResults.filter(m => m.winner === fPair).length;
-    const sWins = cResults.filter(m => m.winner === sPair).length;
-
-    if (c.endDate) {
-      cycleState = 'Cerrado';
-      if (cp) {
-        if (fWins >= 2) {
-          winnerPairCycle = fPair;
-        } else if (sWins >= 2) {
-          winnerPairCycle = sPair;
-        } else if (fWins === 1 && sWins === 0) {
-          winnerPairCycle = fPair;
-        } else if (sWins === 1 && fWins === 0) {
-          winnerPairCycle = sPair;
-        } else if (cResults.length === 0) {
-          winnerPairCycle = 'Sin partidos jugados';
-        } else {
-          winnerPairCycle = 'Datos no concluyentes';
-        }
-      } else {
-        winnerPairCycle = 'Datos no concluyentes';
-      }
-    } else {
-      // En curso pero sin endDate
-      if (cResults.length === 0) {
-        winnerPairCycle = 'Sin partidos jugados';
-      }
-    }
-
-    return {
-      cycleNumber: i + 1,
-      startDate: c.startDate,
-      endDate: c.endDate,
-      matches: cResults,
-      noMatches: cNoMatches,
-      currentPairs: cp,
-      firstPair: fPair,
-      secondPair: sPair,
-      winnerPairCycle,
-      cycleState
-    };
-  });
-
-  // Orden: primero ciclos en curso, luego cerrados en orden descendente de fecha de inicio
-  const sortedCycles = [...cycleHistory].sort((a, b) => {
-    if (a.cycleState === 'En curso' && b.cycleState !== 'En curso') return -1;
-    if (b.cycleState === 'En curso' && a.cycleState !== 'En curso') return 1;
-    return dayjs(b.startDate).diff(dayjs(a.startDate));
-  });
-
-  const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
-  let matchHour = '';
-  if (dayOfWeek === 1) matchHour = '20:00';
-  else if (dayOfWeek === 4) matchHour = '19:30';
 
   const handleManualWinnerSave = async () => {
-    if (!manualWinnerCycle || !manualWinnerPair) {
-      alert('Debes seleccionar un ganador.');
+    if (!manualWinnerModal.cycle?.id || !manualWinnerModal.winnerPair) {
+      setUserMessage({ type: 'error', text: 'Debes seleccionar un ciclo y una pareja ganadora.' });
       return;
     }
-    const cycleRef = doc(db, 'cycles', manualWinnerCycle.id);
-    const endDate = manualWinnerCycle.endDate || dayjs().format('YYYY-MM-DD');
-    await updateDoc(cycleRef, { endDate });
-
-    setManualWinnerModalOpen(false);
-    setManualWinnerPair('');
-    setManualWinnerCycle(null);
-    setManualFirstPair('');
-    setManualSecondPair('');
-    loadData();
+    setIsLoading(true);
+    try {
+      const endDateToSet = manualWinnerModal.cycle.endDate || dayjs().format('YYYY-MM-DD');
+      await firebaseService.updateCycle(manualWinnerModal.cycle.id, {
+        endDate: endDateToSet,
+      });
+      setUserMessage({ type: 'success', text: `Ganador manual guardado y ciclo cerrado/actualizado.` });
+      handleModalClose(setManualWinnerModal);
+      await loadAllData(true);
+    } catch (err) {
+      console.error("Error saving manual winner:", err);
+      setUserMessage({ type: 'error', text: 'Error al guardar ganador manual.' });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // ---------------------------
-  //  Render principal
-  // ---------------------------
+
+  // --- Valores Memoizados para UI ---
+  const calendarLinks = useMemo(() => {
+    const createLink = (textSuffix, dayOfWeekISO, timeStart, timeEnd) => {
+      try {
+        let date = dayjs();
+        const targetIsoDay = parseInt(dayOfWeekISO, 10);
+
+        if (isNaN(targetIsoDay) || targetIsoDay < 1 || targetIsoDay > 7) {
+          console.error("calendarLinks: Invalid dayOfWeekISO:", dayOfWeekISO, ". Must be 1-7.");
+          return "#error-invalid-day";
+        }
+
+        let attempts = 0;
+        // Day.js isoWeekday(): 1 (Lunes) a 7 (Domingo)
+        while (date.isoWeekday() !== targetIsoDay && attempts < 14) {
+          date = date.add(1, 'day');
+          attempts++;
+        }
+
+        if (attempts >= 14) { // Seguridad por si algo va mal en el bucle
+          console.error("calendarLinks: Could not find target day for", textSuffix, "from", dayjs().format(), "targetISO", targetIsoDay);
+          return "#error-day-not-found";
+        }
+
+        const datesParam = `${date.format('YYYYMMDD')}T${timeStart}/${date.format('YYYYMMDD')}T${timeEnd}`;
+        const dayCodeForRecur = date.format('dd').substring(0, 2).toUpperCase();
+
+        const params = new URLSearchParams({
+          action: 'TEMPLATE',
+          text: `Partida Padel - ${textSuffix}`,
+          dates: datesParam,
+          details: `Partida de padel en ${PADEL_LOCATION}`,
+          location: PADEL_LOCATION,
+          recur: `RRULE:FREQ=WEEKLY;BYDAY=${dayCodeForRecur}`
+        });
+        return `https://www.google.com/calendar/render?${params.toString()}`;
+      } catch (e) {
+        console.error(`calendarLinks: Error in createLink for ${textSuffix}:`, e);
+        return "#error-creating-link";
+      }
+    };
+
+    try {
+      const mondayLink = createLink('Lunes', 1, '200000', '213000'); // ISO 1 = Lunes
+      const thursdayLink = createLink('Jueves', 4, '193000', '210000'); // ISO 4 = Jueves
+
+      if (typeof mondayLink !== 'string' || typeof thursdayLink !== 'string' || mondayLink.startsWith("#error") || thursdayLink.startsWith("#error")) {
+        console.error("calendarLinks: Fallback due to link creation issue.", { mondayLink, thursdayLink });
+        return { monday: "#fallbackLink", thursday: "#fallbackLink" };
+      }
+      return {
+        monday: mondayLink,
+        thursday: thursdayLink,
+      };
+    } catch (e) {
+      console.error("calendarLinks: General error in useMemo:", e);
+      return {
+        monday: "#generalErrorLinkM",
+        thursday: "#generalErrorLinkTh"
+      };
+    }
+  }, []); // PADEL_LOCATION es constante global, no necesita ser dependencia
+
+  const cycleProgressDisplay = useMemo(() => {
+    if (!currentCycle || currentCycle.endDate) return { played: 0, percentage: 0, text: "Ciclo no activo o finalizado." };
+    const cycleMatches = results.filter(m => m.cycleId === currentCycle.id && m.winner && m.loser);
+    const played = cycleMatches.length;
+    let targetGames = 3;
+    if (played >= 2 && currentCycle.currentPairs) {
+      const pairs = currentCycle.currentPairs.split('vs').map(p => getPairIdentifier(p.trim()));
+      if (pairs.length === 2) {
+        const winsP1 = cycleMatches.filter(m => m.winner === pairs[0]).length;
+        const winsP2 = cycleMatches.filter(m => m.winner === pairs[1]).length;
+        if (winsP1 >= 2 || winsP2 >= 2) targetGames = played;
+      }
+    }
+    const percentage = targetGames > 0 ? (played / Math.min(targetGames, 3)) * 100 : 0;
+    return {
+      played, percentage,
+      text: `Progreso: ${played} de ${Math.min(targetGames, 3)} ${played === 1 ? 'partido' : 'partidos'}`
+    };
+  }, [currentCycle, results]);
+
+  const lastClosedCycleInfo = useMemo(() => {
+    const closed = cycles.filter(c => c.endDate && dayjs(c.endDate).isBefore(dayjs()));
+    if (!closed.length) return null;
+
+    const lastOne = closed.sort((a, b) => dayjs(b.endDate).diff(dayjs(a.endDate)))[0];
+    const closedResults = results.filter(m => m.cycleId === lastOne.id && m.winner && m.loser);
+
+    if (!lastOne.currentPairs) return { ...lastOne, winnerDisplay: 'Parejas no disponibles' };
+    const pairs = lastOne.currentPairs.split('vs').map(p => getPairIdentifier(p.trim()));
+    if (pairs.length < 2) return { ...lastOne, winnerDisplay: 'Parejas mal configuradas' };
+
+    const fWins = closedResults.filter(m => m.winner === pairs[0]).length;
+    const sWins = closedResults.filter(m => m.winner === pairs[1]).length;
+    let winner = 'Datos no concluyentes';
+
+    if (fWins >= 2) {
+      winner = pairs[0];
+    } else if (sWins >= 2) {
+      winner = pairs[1];
+    } else if (closedResults.length >= 3) {
+      if (fWins > sWins) winner = pairs[0];
+      else if (sWins > fWins) winner = pairs[1];
+      // Si hay empate en victorias con 3 partidos, sigue siendo 'Datos no concluyentes'
+    } else if (closedResults.length > 0) { // Menos de 3 partidos, pero el ciclo está cerrado
+      if (fWins > sWins && fWins > 0) winner = pairs[0]; // Ganó el que tiene más, si es > 0
+      else if (sWins > fWins && sWins > 0) winner = pairs[1];
+      // Si fWins === sWins (ej. 0-0 o 1-1), sigue 'Datos no concluyentes'
+    }
+    // Esta condición debe ir después de las comprobaciones de victorias
+    if (closedResults.length === 0) { // Si después de todo, no hubo partidos
+      winner = 'Sin partidos jugados';
+    }
+
+    return { ...lastOne, winnerDisplay: winner };
+  }, [cycles, results]);
+
+  const cycleHistoryDisplay = useMemo(() => {
+    return cycles
+      .map((c, i) => {
+        const cResults = results.filter(m => m.cycleId === c.id && m.winner && m.loser)
+          .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
+        const cNoMatches = noMatchDays.filter(n => {
+          const start = dayjs(c.startDate); const end = c.endDate ? dayjs(c.endDate) : null;
+          const nmDate = dayjs(n.date);
+          return nmDate.isBetween(start, end || dayjs().add(100, 'years'), 'day', '[]');
+        }).sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
+
+        let state = 'En curso'; let winner = 'Aún no determinado';
+        const pairs = c.currentPairs ? c.currentPairs.split('vs').map(p => getPairIdentifier(p.trim())) : [];
+        const fPairName = pairs[0] || ''; const sPairName = pairs[1] || '';
+
+        if (c.endDate && dayjs(c.endDate).isBefore(dayjs())) {
+          state = 'Cerrado';
+          const fWins = cResults.filter(m => m.winner === fPairName).length;
+          const sWins = cResults.filter(m => m.winner === sPairName).length;
+          if (fWins >= 2) winner = fPairName;
+          else if (sWins >= 2) winner = sPairName;
+          else if (cResults.length >= 3) {
+            if (fWins > sWins) winner = fPairName; else if (sWins > fWins) winner = sPairName;
+            else winner = 'Datos no concluyentes';
+          } else if (cResults.length > 0) {
+            if (fWins > sWins) winner = fPairName; else if (sWins > fWins) winner = sPairName;
+            else winner = 'Datos no concluyentes';
+          }
+          else if (cResults.length === 0) winner = 'Sin partidos jugados';
+          // else winner = 'Datos no concluyentes'; // Ya es el valor por defecto
+        } else if (c.endDate) {
+          state = 'Programado para finalizar';
+        }
+
+        return {
+          ...c,
+          cycleNumberDisplay: i + 1,
+          matchesPlayed: cResults,
+          noMatchDaysInCycle: cNoMatches,
+          firstPairName: fPairName,
+          secondPairName: sPairName,
+          calculatedWinner: winner,
+          statusText: state,
+        };
+      })
+      .sort((a, b) => {
+        if (a.statusText === 'En curso' && b.statusText !== 'En curso') return -1;
+        if (b.statusText === 'En curso' && a.statusText !== 'En curso') return 1;
+        return dayjs(b.startDate).diff(dayjs(a.startDate));
+      });
+  }, [cycles, results, noMatchDays]);
+
+  const paginatedCycleHistory = useMemo(() => {
+    const startIndex = (cyclesCurrentPage - 1) * CYCLES_PER_PAGE;
+    return cycleHistoryDisplay.slice(startIndex, startIndex + CYCLES_PER_PAGE);
+  }, [cycleHistoryDisplay, cyclesCurrentPage]);
+
+  const showNewCycleConfig = useMemo(() => {
+    if (!currentCycle) return true;
+    if (currentCycle.endDate && dayjs(currentCycle.endDate).isBefore(dayjs())) return true;
+
+    const cycleMatches = results.filter(m => m.cycleId === currentCycle.id && m.winner && m.loser);
+    if (cycleMatches.length >= 3) return true;
+
+    if (currentCycle.currentPairs && cycleMatches.length >= 2) {
+      const pairs = currentCycle.currentPairs.split('vs').map(p => getPairIdentifier(p.trim()));
+      if (pairs.length === 2) {
+        const fWins = cycleMatches.filter(m => m.winner === pairs[0]).length;
+        const sWins = cycleMatches.filter(m => m.winner === pairs[1]).length;
+        if (fWins >= 2 || sWins >= 2) return true;
+      }
+    }
+    return false;
+  }, [currentCycle, results]);
+
+  const getPairInitials = useCallback((pairName) => {
+    if (!pairName) return '';
+    return pairName.split('&').map(s => s.trim().charAt(0).toUpperCase()).join('&');
+  }, []);
+
+  const generalNextPlayableDay = useMemo(() => {
+    let lastPlayedDateOverall = null;
+    if (results && results.length > 0) {
+      const sortedResultsByDate = [...results]
+        .filter(r => r.date)
+        .sort((a, b) => dayjs(b.date).diff(dayjs(a.date)));
+      if (sortedResultsByDate.length > 0) {
+        lastPlayedDateOverall = dayjs(sortedResultsByDate[0].date);
+      }
+    }
+
+    let searchStartDate = dayjs();
+    if (lastPlayedDateOverall && lastPlayedDateOverall.isSameOrAfter(searchStartDate, 'day')) {
+      searchStartDate = lastPlayedDateOverall.add(1, 'day');
+    }
+
+    let dateIterator = searchStartDate.clone().subtract(1, 'day');
+
+    for (let i = 0; i < 90; i++) {
+      dateIterator = dateIterator.add(1, 'day');
+      const dow = dateIterator.day();
+      if (dow === 1 || dow === 4) {
+        const isNoMatch = noMatchDays.some(nmd => dayjs(nmd.date).isSame(dateIterator, 'day'));
+        if (!isNoMatch) {
+          return dateIterator;
+        }
+      }
+    }
+    return null;
+  }, [results, noMatchDays]);
+
+  const getCalendarDayInfo = useCallback((dayToStyle) => {
+    if (!dayToStyle || typeof dayToStyle.isSame !== 'function') {
+      console.error("getCalendarDayInfo recibió un dayToStyle inválido:", dayToStyle);
+      return { type: 'empty', tooltip: 'Error de fecha', style: { backgroundColor: 'red', color: 'white' } };
+    }
+
+    const isNextMatchOfCycle = nextMatchDetails.date && dayToStyle.isSame(nextMatchDetails.date, 'day');
+    const isGeneralNextPlayable = !isNextMatchOfCycle && generalNextPlayableDay && dayToStyle.isSame(generalNextPlayableDay, 'day');
+
+    if (isNextMatchOfCycle) {
+      return {
+        type: 'nextMatchCycle',
+        tooltip: `Próximo partido del ciclo: ${nextMatchDetails.pairsText || 'Parejas por definir'}`,
+        style: { backgroundColor: 'primary.main', fontWeight: 'bold', border: '2px solid #1068b8', color: 'white' }
+      };
+    }
+    if (isGeneralNextPlayable) {
+      return {
+        type: 'generalNextPlayable',
+        tooltip: `Próximo Lunes/Jueves disponible`,
+        style: { backgroundColor: 'info.light', fontWeight: 'normal', border: '2px solid #64b5f6', color: 'black' }
+      };
+    }
+
+    const noMatch = noMatchDays.find(nmd => dayjs(nmd.date, 'YYYY-MM-DD').isSame(dayToStyle, 'day'));
+    if (noMatch) return {
+      type: 'noMatch', tooltip: `Día sin partido${noMatch.reason ? ` (${noMatch.reason})` : ''}`,
+      style: { backgroundColor: 'grey.400', color: 'common.white', border: '1px solid #ccc' },
+    };
+
+    const dayRes = results.find(r => dayjs(r.date, 'YYYY-MM-DD').isSame(dayToStyle, 'day') && r.winner);
+    if (dayRes) {
+      const sets = dayRes.sets?.map(s => `${s.pair1Score}-${s.pair2Score}`).join(', ') || 'N/A';
+      return {
+        type: 'played', winner: dayRes.winner, loser: dayRes.loser,
+        tooltip: `${dayRes.winner} ganaron a ${dayRes.loser} (${sets}). ${dayRes.matchNumberInCycle || ''}º partido.`,
+        style: { background: 'linear-gradient(to bottom, green 50%, red 50%)', color: 'white', border: '1px solid #ccc' },
+      };
+    }
+
+    const dow = dayToStyle.day();
+    if ((dow === 1 || dow === 4) && dayToStyle.isSameOrAfter(dayjs(), 'day')) {
+      return { type: 'scheduledRegular', tooltip: 'Día de partido (L/J)', style: { backgroundColor: '#e3f2fd', border: '1px solid #ccc' } };
+    }
+
+    return { type: 'empty', tooltip: 'Sin evento', style: { backgroundColor: 'background.paper', border: '1px solid #eee' } };
+  }, [noMatchDays, results, nextMatchDetails.date, nextMatchDetails.pairsText, generalNextPlayableDay]);
+
+
+  // --- Renderizado ---
+  if (isLoading && !cycles.length && !results.length && !noMatchDays.length) {
+    return <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress size={60} /><Typography sx={{ ml: 2 }}>Cargando datos...</Typography></Container>;
+  }
+
   return (
-    <Container>
-      <Box sx={{ backgroundColor: 'black', color: 'white', padding: '10px', textAlign: 'center', marginTop: '20px' }}>
-        <Typography variant="h5">Información de las Partidas</Typography>
-      </Box>
+    <Container maxWidth="lg" sx={{ pb: 4 }}>
+      <Paper elevation={3} sx={{ backgroundColor: 'black', color: 'white', p: 2, textAlign: 'center', my: 2 }}>
+        <Typography variant="h5" component="h1">Información de Partidas de Pádel</Typography>
+      </Paper>
 
-      {/* Info recurrente: Partida Lunes y Jueves */}
-      <Box sx={{ marginTop: '20px' }}>
-        <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold' }}>
-          Partida del Lunes
-        </Typography>
-        <Typography variant="body1">Fecha: Lunes, <strong>20:00 - 21:30</strong></Typography>
-        <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
-        <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
-        <iframe
-          src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
-          width="100%"
-          height="300"
-          style={{ border: 0, marginTop: '10px' }}
-          allowFullScreen=""
-          loading="lazy"
-          title="Mapa Passing Padel"
-        ></iframe>
-        <Box sx={{ textAlign: 'center', marginTop: '10px' }}>
-          <Button
-            component="a"
-            href={calendarLinkMonday}
-            target="_blank"
-            startIcon={<NotificationsActiveIcon />}
-            sx={{
-              textTransform: 'none',
-              backgroundColor: '#f0f0f0',
-              color: '#333',
-              '&:hover': { backgroundColor: '#ddd' }
-            }}
-          >
-            Añadir la Partida del Lunes a Google Calendar
-          </Button>
-        </Box>
+      {isLoading && <LinearProgress sx={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1301 }} />}
+      {error && <Alert severity="error" sx={{ my: 2 }} onClose={() => setError(null)}>{error}</Alert>}
+      {userMessage.text && <Alert severity={userMessage.type || 'info'} sx={{ my: 2 }} onClose={() => setUserMessage({ type: '', text: '' })}>{userMessage.text}</Alert>}
 
-        <Typography variant="h6" sx={{ color: 'black', fontWeight: 'bold', marginTop: '20px' }}>
-          Partida del Jueves
-        </Typography>
-        <Typography variant="body1">Fecha: Jueves, <strong>19:30 - 21:00</strong></Typography>
-        <Typography variant="body1">Lugar: <strong>Passing Padel</strong></Typography>
-        <Typography variant="body1">Teléfono: <strong>722 18 91 91</strong></Typography>
-        <iframe
-          src="https://maps.google.com/maps?q=Passing%20Padel&t=&z=13&ie=UTF8&iwloc=&output=embed"
-          width="100%"
-          height="300"
-          style={{ border: 0, marginTop: '10px' }}
-          allowFullScreen=""
-          loading="lazy"
-          title="Mapa Passing Padel"
-        ></iframe>
-        <Box sx={{ textAlign: 'center', marginTop: '10px' }}>
-          <Button
-            component="a"
-            href={calendarLinkThursday}
-            target="_blank"
-            startIcon={<NotificationsActiveIcon />}
-            sx={{
-              textTransform: 'none',
-              backgroundColor: '#f0f0f0',
-              color: '#333',
-              '&:hover': { backgroundColor: '#ddd' }
-            }}
-          >
-            Añadir la Partida del Jueves a Google Calendar
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Título de ciclos */}
-      <Typography
-        variant="h4"
-        sx={{
-          textAlign: 'center',
-          marginTop: '30px',
-          marginBottom: '20px',
-          fontWeight: 'bold'
-        }}
-      >
-        Ciclos de Partidas
-      </Typography>
-
-      {previousNoMatchMessage && (
-        <Typography variant="body1" sx={{ color: 'red', mt: 3 }}>
-          {previousNoMatchMessage}
-        </Typography>
-      )}
-
-      {/* Si hay un ciclo actual y no está cerrado */}
-      {nextMatchDate && currentCycle && !currentCycle.endDate && (
-        <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
-          <Typography variant="h6"><strong>Próximo Partido</strong></Typography>
-          <Typography variant="body1">
-            Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong>
-          </Typography>
-          {matchHour && (
-            <Typography variant="body1">
-              Hora: <strong>{matchHour}</strong>
-            </Typography>
-          )}
-          <Typography variant="body1">
-            Lugar: <strong>Passing Padel</strong>
-          </Typography>
-          <Typography variant="body1">
-            Parejas: <strong>{nextMatchPairs}</strong>
-          </Typography>
-          <Typography variant="body1">{nextMatchInfo}</Typography>
-          {currentCycle && (
-            <Typography variant="body1" sx={{ mt: 1 }}>
-              Parejas en el ciclo en curso: <strong>{currentCycle.currentPairs}</strong>
-            </Typography>
-          )}
-          {cycleProgress}
-          {currentCycle && (!currentCycle.endDate || dayjs(currentCycle.endDate).isAfter(dayjs())) && (
-            <Box sx={{ textAlign: 'right', mt: 2 }}>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={handleCancelCurrentCycle}
-                sx={{
-                  textTransform: 'none',
-                  '&:hover': { backgroundColor: '#d32f2f' },
-                }}
-              >
-                Anular ciclo actual
-              </Button>
-            </Box>
-          )}
-        </Box>
-      )}
-
-      {/* Si no hay ciclo actual, mostrar el último cerrado y su ganador (si procede) */}
-      {!currentCycle && lastClosedCycle && lastClosedCycleWinner &&
-        lastClosedCycleWinner !== 'Sin partidos jugados' &&
-        lastClosedCycleWinner !== 'Datos no concluyentes' && (
-          <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
-            <Typography variant="body1">
-              Último ciclo cerrado: Ganador - <strong>{lastClosedCycleWinner}</strong>
-            </Typography>
-          </Box>
-        )}
-
-      {/* Configurar nuevo ciclo si corresponde */}
-      {showPairSelection && (
-        <Box sx={{ marginTop: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '8px' }}>
-          <Typography variant="h6">Configurar Próximo Ciclo</Typography>
-          <Typography variant="body2">
-            Selecciona 4 jugadores diferentes para las parejas del próximo ciclo.
-          </Typography>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Pareja 1 - Jugador 1</InputLabel>
-                <Select
-                  value={pair1Player1}
-                  onChange={(e) => setPair1Player1(e.target.value)}
-                >
-                  {availablePlayers.map(p => (
-                    <MenuItem key={p} value={p}>{p}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Pareja 1 - Jugador 2</InputLabel>
-                <Select
-                  value={pair1Player2}
-                  onChange={(e) => setPair1Player2(e.target.value)}
-                >
-                  {availablePlayers.map(p => (
-                    <MenuItem key={p} value={p}>{p}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Pareja 2 - Jugador 1</InputLabel>
-                <Select
-                  value={pair2Player1}
-                  onChange={(e) => setPair2Player1(e.target.value)}
-                >
-                  {availablePlayers.map(p => (
-                    <MenuItem key={p} value={p}>{p}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={6}>
-              <FormControl fullWidth>
-                <InputLabel>Pareja 2 - Jugador 2</InputLabel>
-                <Select
-                  value={pair2Player2}
-                  onChange={(e) => setPair2Player2(e.target.value)}
-                >
-                  {availablePlayers.map(p => (
-                    <MenuItem key={p} value={p}>{p}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+      <Grid container spacing={3} sx={{ my: 2 }}>
+        {[
+          { day: "Lunes", time: "20:00 - 21:30", calendarLink: calendarLinks.monday, title: "Partida del Lunes" },
+          { day: "Jueves", time: "19:30 - 21:00", calendarLink: calendarLinks.thursday, title: "Partida del Jueves" }
+        ].map(info => (
+          <Grid item xs={12} md={6} key={info.day}>
+            <Paper elevation={1} sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>{info.title}</Typography>
+              <Typography>Día: {info.day}, <strong>{info.time}</strong></Typography>
+              <Typography>Lugar: <strong>{PADEL_LOCATION}</strong> (Tel: {PADEL_PHONE})</Typography>
+              <Box sx={{ flexGrow: 1, mt: 1, mb: 1 }}>
+                <iframe
+                  src={MAP_IFRAME_SRC}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0, borderRadius: '4px', minHeight: '180px' }}
+                  allowFullScreen
+                  loading="lazy"
+                  title={`Mapa ${PADEL_LOCATION} ${info.day}`}>
+                </iframe>
+              </Box>
+              <Box sx={{ textAlign: 'center', mt: 'auto' }}>
+                <Button component="a" href={info.calendarLink} target="_blank" rel="noopener noreferrer" startIcon={<NotificationsActiveIcon />} variant="outlined" size="small">
+                  Añadir a Google Calendar
+                </Button>
+              </Box>
+            </Paper>
           </Grid>
-          <Box sx={{ textAlign: 'right', mt: 2 }}>
-            <Button variant="contained" onClick={handleSaveNextCycle}>
-              Guardar
-            </Button>
-          </Box>
-        </Box>
-      )}
-
-      {/* Botones para cambiar de mes en el calendario */}
-      <Grid container spacing={2} alignItems="center" justifyContent="center" sx={{ mt: 4 }}>
-        <Grid item xs={4} sm={3} md={2}>
-          <Button variant="outlined" fullWidth onClick={handlePrevMonth}>
-            Mes Anterior
-          </Button>
-        </Grid>
-        <Grid item xs={4} sm={6} md={4} sx={{ textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-            {dayjs().year(viewYear).month(viewMonth).format('MMMM YYYY')}
-          </Typography>
-        </Grid>
-        <Grid item xs={4} sm={3} md={2}>
-          <Button variant="outlined" fullWidth onClick={handleNextMonth}>
-            Mes Siguiente
-          </Button>
-        </Grid>
+        ))}
       </Grid>
 
-      {/* Calendario */}
-      <Box sx={{ marginTop: '20px' }}>
-        <Typography variant="h6"><strong>Calendario</strong></Typography>
-        <Typography variant="body2">
-          Toca un día para mostrar opciones. Luego pulsa "Marcar día sin partido" o "Desmarcar día sin partido".
-        </Typography>
-        <Box sx={{ marginTop: '10px', overflowX: 'auto' }}>
-          <Paper>
-            <TableBody>
-              <TableRow>
-                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => (
-                  <TableCell key={d} align="center">
-                    <strong>{d}</strong>
-                  </TableCell>
-                ))}
-              </TableRow>
+      <Divider sx={{ my: 3 }} />
+      <Typography variant="h4" component="h2" sx={{ textAlign: 'center', my: 3, fontWeight: 'bold' }}>Ciclos de Partidas</Typography>
+
+      {nextMatchDetails.previousNoMatchMessage && (
+        <Alert severity="info" sx={{ my: 2 }}>{nextMatchDetails.previousNoMatchMessage}</Alert>
+      )}
+
+      {currentCycle && !currentCycle.endDate && nextMatchDetails.date && (
+        <Paper elevation={2} sx={{ my: 2, p: 2, borderLeft: '5px solid', borderColor: 'secondary.main' }}>
+          <Typography variant="h6" component="h3">
+            <strong>Próximo Partido del Ciclo Actual ({currentCycleNumber}º Ciclo)</strong>
+          </Typography>
+          <Typography>Parejas del ciclo: <strong>{currentCycle.currentPairs}</strong></Typography>
+          <Typography>Fecha: <strong>{nextMatchDetails.date.format('dddd, DD [de] MMMM [de] YYYY')}</strong></Typography> {/* CORREGIDO: YYYY para año completo */}
+          {nextMatchDetails.hour && <Typography>Hora: <strong>{nextMatchDetails.hour}</strong></Typography>}
+          <Typography>Lugar: <strong>{PADEL_LOCATION}</strong></Typography>
+          <Typography>Parejas para el partido: <strong>{nextMatchDetails.pairsText}</strong></Typography>
+          {cycleProgressDisplay && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2">{cycleProgressDisplay.text}</Typography>
+              <LinearProgress variant="determinate" value={cycleProgressDisplay.percentage} sx={{ height: 8, borderRadius: 4 }} />
+            </Box>
+          )}
+          <Box sx={{ textAlign: 'right', mt: 2 }}>
+            <Button variant="contained" color="error" size="small" onClick={handleCancelCurrentCycle}>
+              Anular Ciclo Actual
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
+      {(!currentCycle || (currentCycle?.endDate && dayjs(currentCycle.endDate).isBefore(dayjs()))) && (
+        <Paper elevation={1} sx={{ my: 2, p: 2, backgroundColor: 'grey.100', textAlign: 'center' }}>
+          <Typography variant="h6" gutterBottom>
+            {lastClosedCycleInfo ? `Último ciclo (${lastClosedCycleInfo.currentPairs || 'N/A'}) finalizado el ${dayjs(lastClosedCycleInfo.endDate).format('DD/MM/YY')}.` : (cycles.length > 0 ? "Todos los ciclos han finalizado." : "No hay ciclos activos.")}
+          </Typography>
+          {lastClosedCycleInfo && <Typography>Ganador: <strong>{lastClosedCycleInfo.winnerDisplay || 'No determinado'}</strong></Typography>}
+          <Typography sx={{ mt: 1 }}>Puede configurar el próximo ciclo más abajo.</Typography>
+        </Paper>
+      )}
+
+      {showNewCycleConfig && (<Paper elevation={2} sx={{ my: 3, p: 2 }}>
+        <Typography variant="h6" component="h3" gutterBottom>Configurar Próximo Ciclo</Typography>
+        <Grid container spacing={2}>
+          {Object.keys(newCyclePairs).map((key, index) => (
+            <Grid item xs={12} sm={6} key={key}>
+              <FormControl fullWidth variant="outlined" size="small">
+                <InputLabel>{`P${Math.floor(index / 2) + 1} - J${index % 2 + 1}`}</InputLabel>
+                <Select name={key} value={newCyclePairs[key]} label={`P${Math.floor(index / 2) + 1} - J${index % 2 + 1}`}
+                  onChange={(e) => setNewCyclePairs(prev => ({ ...prev, [e.target.name]: e.target.value }))}>
+                  <MenuItem value=""><em>-- Seleccionar --</em></MenuItem>
+                  {AVAILABLE_PLAYERS.map(p => (
+                    <MenuItem key={p} value={p} disabled={Object.values(newCyclePairs).includes(p) && newCyclePairs[key] !== p}>
+                      {p}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          ))}
+        </Grid>
+        <Box sx={{ textAlign: 'right', mt: 2 }}>
+          <Button variant="contained" color="primary" onClick={handleSaveNextCycle}>Guardar Nuevo Ciclo</Button>
+        </Box>
+      </Paper>)}
+
+      <Divider sx={{ my: 3 }} />
+      <Paper elevation={1} sx={{ my: 3, p: 2 }}>
+        <Typography variant="h6" component="h3" gutterBottom>Calendario</Typography>
+        <Grid container spacing={1} alignItems="center" justifyContent="center" sx={{ mb: 2 }}>
+          <Grid item><Button variant="outlined" onClick={() => setViewDate(prev => prev.subtract(1, 'month'))} size="small">Mes Ant.</Button></Grid>
+          <Grid item xs sx={{ textAlign: 'center' }}><Typography variant="h6">{viewDate.format('MMMM YYYY')}</Typography></Grid> {/* CORREGIDO: YYYY */}
+          <Grid item><Button variant="outlined" onClick={() => setViewDate(prev => prev.add(1, 'month'))} size="small">Mes Sig.</Button></Grid>
+        </Grid>
+        <Box sx={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <thead>
+              <tr>{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <th key={d} style={{ textAlign: 'center', padding: '8px', border: '1px solid #ddd' }}>{d}</th>)}</tr>
+            </thead>
+            <tbody>
               {(() => {
-                const startOfMonth = dayjs().year(viewYear).month(viewMonth).startOf('month');
-                const endOfMonth = dayjs().year(viewYear).month(viewMonth).endOf('month');
-                const weeks = [];
-
-                // Ajustar para que empiece en Lunes
-                let startDay = startOfMonth;
-                while (startDay.day() !== 1) {
-                  startDay = startDay.subtract(1, 'day');
-                }
-
-                let currentDay = startDay.clone();
-                while (currentDay.isBefore(endOfMonth) || currentDay.isSame(endOfMonth, 'day')) {
+                const monthStart = viewDate.startOf('month');
+                const calendarStart = monthStart.startOf('isoWeek');
+                const weeksArray = [];
+                let currentDayIter = calendarStart.clone();
+                for (let w = 0; w < 6; w++) {
                   const weekDays = [];
-                  for (let i = 0; i < 7; i++) {
-                    weekDays.push(currentDay);
-                    currentDay = currentDay.add(1, 'day');
+                  for (let d = 0; d < 7; d++) {
+                    weekDays.push(currentDayIter.clone());
+                    currentDayIter = currentDayIter.add(1, 'day');
                   }
-                  weeks.push(weekDays);
+                  weeksArray.push(weekDays);
                 }
+                return weeksArray.map((week, wIdx) => (
+                  <TableRow key={`week-${wIdx}`}>
+                    {week.map((day, dayIdx) => {
+                      if (!day || typeof day.isSame !== 'function') {
+                        console.error("Calendario: 'day' es inválido.", { day, wIdx, dayIdx });
+                        return <TableCell key={`error-day-${wIdx}-${dayIdx}`}>Error Día</TableCell>;
+                      }
 
-                return weeks.map((week, wIndex) => (
-                  <TableRow key={wIndex}>
-                    {week.map(day => renderDayCell(day))}
+                      const dayInfo = getCalendarDayInfo(day);
+                      if (!dayInfo || typeof dayInfo.type === 'undefined') {
+                        console.error("Calendario: 'dayInfo' es inválido.", { dayInfo, forDay: day.format("YYYY-MM-DD") });
+                        return <TableCell key={`error-info-${wIdx}-${dayIdx}`}>Error Info</TableCell>;
+                      }
+
+                      const isCurrentMonth = day.isSame(viewDate, 'month');
+                      const isToday = day.isSame(dayjs(), 'day');
+
+                      return (
+                        <Tooltip
+                          key={day.format('YYYYMMDD')}
+                          placement="top"
+                          arrow
+                          title={
+                            <Box sx={{ p: 1 }}>
+                              <Typography variant="caption" display="block">{day.format('dddd, D MMM')}</Typography>
+                              <Typography variant="body2">{dayInfo.tooltip}</Typography>
+                              {isCurrentMonth &&
+                                (dayInfo.type === 'scheduledRegular' ||
+                                  dayInfo.type === 'generalNextPlayable' ||
+                                  dayInfo.type === 'nextMatchCycle' ||
+                                  (dayInfo.type === 'empty' && (day.day() === 1 || day.day() === 4))) &&
+                                <Button size="small" sx={{ textTransform: 'none', mt: 0.5, color: 'white', display: 'block' }} onClick={() => { setNoMatchModal({ open: true, selectedDay: day, reason: '' }) }}>Marcar sin partido</Button>
+                              }
+                              {dayInfo.type === 'noMatch' &&
+                                <Button size="small" sx={{ textTransform: 'none', mt: 0.5, color: 'yellow', display: 'block' }} onClick={() => handleNoMatchDelete(day)}>Desmarcar</Button>
+                              }
+                            </Box>
+                          }
+                        >
+                          <TableCell
+                            align="center"
+                            sx={{
+                              ...dayInfo.style,
+                              height: { xs: 50, sm: 60 },
+                              p: 0,
+                              opacity: isCurrentMonth ? 1 : 0.35, // Ligeramente más opaco para días fuera del mes
+                              cursor: 'pointer',
+                              '&:hover': { boxShadow: 3, transform: 'scale(1.05)' },
+                              transition: 'transform 0.1s ease-in-out',
+                              position: 'relative' // Asegurar que TableCell es el contexto de posicionamiento
+                            }}
+                          >
+                            {/* CAMBIOS APLICADOS AL SIGUIENTE TYPOGRAPHY */}
+                            <Typography
+                              variant={isCurrentMonth && isToday ? "subtitle2" : "caption"}
+                              sx={{
+                                position: 'absolute', top: 2, right: 4,
+                                fontWeight: isToday ? 'bold' : 'normal',
+                                color: isToday
+                                  ? 'primary.contrastText'
+                                  : isCurrentMonth
+                                    ? (dayInfo.style.backgroundColor && (dayInfo.style.backgroundColor === 'primary.main' || dayInfo.style.backgroundColor === 'info.light' || dayInfo.style.backgroundColor === 'grey.400') ? 'white' : 'text.primary')
+                                    : 'text.disabled',
+                                backgroundColor: isToday ? 'primary.dark' : 'transparent',
+                                borderRadius: isToday ? '50%' : '0',
+                                padding: isToday ? '1px 5px' : '0',
+                                lineHeight: 1.2,
+                                zIndex: 1, // Para asegurar que esté por encima del color de fondo de la celda
+                                // Mostrar el número solo si es del mes actual y no es un día con contenido de resultado (played)
+                                // o un día 'noMatch' donde el color de fondo es suficiente.
+                                // Si es hoy, siempre se muestra.
+                                visibility: isCurrentMonth && (dayInfo.type === 'played' || dayInfo.type === 'noMatch') && !isToday ? 'hidden' : 'visible',
+                              }}
+                            >
+                              {isCurrentMonth ? day.date() : ''}
+                            </Typography>
+                            {/* FIN DE CAMBIOS AL TYPOGRAPHY */}
+                            {dayInfo.type === 'played' && isCurrentMonth && (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', zIndex: 0 }}> {/* Asegurar que esto esté detrás del número si es necesario */}
+                                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.1 }}>{getPairInitials(dayInfo.winner)}</Typography>
+                                <Divider sx={{ width: '50%', bgcolor: 'rgba(255,255,255,0.3)', my: 0.1 }} />
+                                <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold', lineHeight: 1.1 }}>{getPairInitials(dayInfo.loser)}</Typography>
+                              </Box>
+                            )}
+                          </TableCell>
+                        </Tooltip>
+                      );
+                    })}
                   </TableRow>
                 ));
               })()}
-            </TableBody>
-          </Paper>
+            </tbody>
+          </table>
         </Box>
-      </Box>
-
-      <Box sx={{ mt: 2 }}>
-        <Typography variant="subtitle1"><strong>Leyenda:</strong></Typography>
-        <Typography variant="body2">
-          - Mitad superior verde y mitad inferior roja: Partido jugado (superior=ganador, inferior=perdedor, iniciales)
-        </Typography>
-        <Typography variant="body2">- Gris: Día sin partido</Typography>
-        <Typography variant="body2">- Azul claro: Partido programado (lunes/jueves sin resultado)</Typography>
-        <Typography variant="body2">- Blanco: Sin evento</Typography>
-      </Box>
-
-      {/* Modal para crear un día sin partido */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <Box sx={styleModal}>
-          <IconButton
-            sx={{ position: 'absolute', top: 5, right: 5, color: 'red' }}
-            onClick={() => setModalOpen(false)}
-          >
-            <CloseIcon />
-          </IconButton>
-          <Typography variant="h6">Marcar como día sin partido</Typography>
-          <Typography variant="body1" sx={{ mt: 2 }}>
-            {selectedDay ? `Día: ${selectedDay.format('DD/MM/YYYY')}` : ''}
-          </Typography>
-          <TextField
-            fullWidth
-            label="Motivo (opcional)"
-            value={noMatchReason}
-            onChange={(e) => setNoMatchReason(e.target.value)}
-            sx={{ mt: 2 }}
-          />
-          <Box sx={{ textAlign: 'right', mt: 2 }}>
-            <Button variant="contained" onClick={handleNoMatchSave}>
-              Guardar
-            </Button>
-          </Box>
+        <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: { xs: 0.5, sm: 1.5 }, justifyContent: 'center', fontSize: '0.75rem' }}>
+          {[
+            { label: 'Jugado (G/P)', style: { background: 'linear-gradient(to bottom, green 50%, red 50%)', color: 'white' } },
+            { label: 'Próx. Partido Ciclo', style: { backgroundColor: 'primary.main', color: 'white' } },
+            { label: 'Próx. L/J General', style: { backgroundColor: 'info.light', color: 'black' } },
+            { label: 'Día Partido (L/J)', style: { backgroundColor: '#e3f2fd' } },
+            { label: 'Sin Partido', style: { backgroundColor: 'grey.400', color: 'white' } }
+          ].map(item => <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', border: '1px solid #ddd', borderRadius: '4px', m: 0.2, p: '2px 4px' }}><Box sx={{ width: 12, height: 12, mr: 0.5, ...item.style, borderRadius: '2px' }} />{item.label}</Box>)}
         </Box>
+      </Paper>
+
+      <Modal open={noMatchModal.open} onClose={() => handleModalClose(setNoMatchModal)}>
+        <Paper sx={MODAL_STYLE}>
+          <IconButton onClick={() => handleModalClose(setNoMatchModal)} sx={{ position: 'absolute', top: 8, right: 8 }}><CloseIcon /></IconButton>
+          <Typography variant="h6">Marcar Día Sin Partido</Typography>
+          <Typography sx={{ mt: 1 }}>Día: {noMatchModal.selectedDay?.format('dddd, DD/MM/YYYY')}</Typography>
+          <TextField fullWidth label="Motivo (opcional)" value={noMatchModal.reason} onChange={e => setNoMatchModal(p => ({ ...p, reason: e.target.value }))} margin="normal" multiline rows={2} />
+          <Box sx={{ textAlign: 'right', mt: 2 }}><Button onClick={() => handleModalClose(setNoMatchModal)} sx={{ mr: 1 }}>Cancelar</Button><Button variant="contained" onClick={handleNoMatchSave}>Guardar</Button></Box>
+        </Paper>
       </Modal>
 
-      {/* Historial de ciclos */}
-      <Box sx={{ marginTop: '30px' }}>
-        <Typography variant="h6"><strong>Historial de Ciclos</strong></Typography>
-        {(() => {
-          // Paginación
-          const startIndex = (cyclesCurrentPage - 1) * cyclesPerPage;
-          const paginatedCycles = sortedCycles.slice(startIndex, startIndex + cyclesPerPage);
+      <Divider sx={{ my: 3 }} />
+      <Paper elevation={1} sx={{ my: 3, p: 2 }}>
+        <Typography variant="h6" component="h3" gutterBottom>Historial de Ciclos</Typography>
+        {!paginatedCycleHistory.length && cycles.length > 0 && <Typography sx={{ textAlign: 'center', my: 2 }}>No hay más ciclos en esta página.</Typography>}
+        {!cycles.length && <Typography sx={{ textAlign: 'center', my: 2 }}>Aún no hay ciclos registrados.</Typography>}
+        {paginatedCycleHistory.map(ch => (
+          <Paper key={ch.id} elevation={2} sx={{ p: 1.5, mb: 1.5, borderLeft: `5px solid ${ch.statusText === 'En curso' ? 'secondary.main' : (ch.statusText === 'Cerrado' ? 'success.main' : 'grey.500')}` }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+              {ch.cycleNumberDisplay}º Ciclo ({dayjs(ch.startDate).format('DD/MM/YY')} - {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YY') : 'En curso'})
+              {ch.statusText === 'En curso' && <Typography component="span" variant="caption" color="secondary.dark" sx={{ ml: 1, fontWeight: 'bold' }}>(ACTUAL)</Typography>}
+            </Typography>
+            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>Parejas: {ch.currentPairs || "No definidas"}</Typography>
+            <Divider sx={{ my: 0.5 }} />
+            {ch.matchesPlayed?.length > 0 && <Typography variant="caption" display="block">Partidos:</Typography>}
+            {ch.matchesPlayed.map(m => <Typography variant="body2" key={m.id} sx={{ fontSize: '0.85rem' }}>{dayjs(m.date).format('DD/MM')}: {m.winner} ganaron a {m.loser} ({m.sets?.map(s => `${s.pair1Score}-${s.pair2Score}`).join(', ') || 'N/A'})</Typography>)}
+            {ch.noMatchDaysInCycle?.length > 0 && <Typography variant="caption" display="block" sx={{ mt: ch.matchesPlayed.length ? 0.5 : 0 }}>Días sin partido:</Typography>}
+            {ch.noMatchDaysInCycle.map(nm => <Typography variant="body2" key={nm.id} sx={{ fontSize: '0.85rem' }}>{dayjs(nm.date).format('DD/MM')}: {nm.reason || 'Sin motivo'}</Typography>)}
+            {(ch.matchesPlayed?.length === 0 && ch.noMatchDaysInCycle?.length === 0) && <Typography variant="body2" sx={{ fontStyle: 'italic', fontSize: '0.85rem' }}>Sin actividad registrada.</Typography>}
+            <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 0.5 }}>
+              Estado: {ch.statusText}
+              {ch.statusText === 'Cerrado' && ch.calculatedWinner && ` - Ganador: ${ch.calculatedWinner}`}
+            </Typography>
+            {ch.statusText === 'Cerrado' && ch.calculatedWinner === 'Datos no concluyentes' && (
+              <Box sx={{ mt: 1, textAlign: 'center' }}>
+                <Button variant="outlined" size="small" color="info" sx={{ textTransform: 'none' }}
+                  onClick={() => setManualWinnerModal({ open: true, cycle: ch, winnerPair: '', firstPair: ch.firstPairName, secondPair: ch.secondPairName })}>
+                  Determinar Ganador Manualmente
+                </Button>
+              </Box>
+            )}
+          </Paper>
+        ))}
+        {cycleHistoryDisplay.length > CYCLES_PER_PAGE && (
+          <Pagination count={Math.ceil(cycleHistoryDisplay.length / CYCLES_PER_PAGE)} page={cyclesCurrentPage} onChange={(e, v) => setCyclesCurrentPage(v)} color="primary" sx={{ mt: 2, display: 'flex', justifyContent: 'center' }} />
+        )}
+      </Paper>
 
-          const dayOfWeek = nextMatchDate ? nextMatchDate.day() : null;
-          let nextMatchHour = '';
-          if (dayOfWeek === 1) nextMatchHour = '20:00';
-          else if (dayOfWeek === 4) nextMatchHour = '19:30';
-
-          return (
-            <>
-              {paginatedCycles.map(ch => {
-                const lastMatch = ch.matches.length > 0 ? ch.matches[ch.matches.length - 1] : null;
-
-                return (
-                  <Box
-                    key={ch.cycleNumber}
-                    sx={{
-                      padding: '10px',
-                      border: ch.cycleState === 'En curso' ? '2px solid #2196f3' : '1px solid #ccc',
-                      borderRadius: '8px',
-                      backgroundColor: 'transparent',
-                      marginBottom: '10px'
-                    }}
-                  >
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'red' }}>
-                      {ch.cycleNumber}º ciclo ({dayjs(ch.startDate).format('DD/MM/YYYY')} - {ch.endDate ? dayjs(ch.endDate).format('DD/MM/YYYY') : 'En curso'})
-                      {ch.cycleState === 'En curso' && (
-                        <span style={{ color: '#1976d2', marginLeft: '8px' }}>Ciclo actual</span>
-                      )}
-                    </Typography>
-                    <Divider sx={{ my: 1 }} />
-
-                    {ch.matches.map((m) => (
-                      <Typography variant="body2" key={m.id}>
-                        <strong>{dayjs(m.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>:{' '}
-                        {m.pair1.player1} & {m.pair1.player2} vs {m.pair2.player1} & {m.pair2.player2}{' '}
-                        (Ganador: <strong>{m.winner}</strong>)
-                      </Typography>
-                    ))}
-
-                    {ch.noMatches.map((nm) => (
-                      <Typography variant="body2" key={'nm-' + nm.id}>
-                        <strong>{dayjs(nm.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}</strong>: Día sin partido{nm.reason ? ' (motivo: ' + nm.reason + ')' : ''}
-                      </Typography>
-                    ))}
-
-                    {ch.cycleState === 'Cerrado' && (
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        Ciclo Cerrado: Ganador: <strong>{ch.winnerPairCycle}</strong>
-                      </Typography>
-                    )}
-                    {ch.cycleState === 'En curso' && !ch.endDate && ch.matches.length === 0 && (
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        En curso: Sin partidos jugados
-                      </Typography>
-                    )}
-                    {ch.cycleState === 'En curso' && !ch.endDate && ch.matches.length > 0 && (
-                      <Typography variant="body2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                        En curso
-                      </Typography>
-                    )}
-
-                    {/* Determinar ganador manual si "Datos no concluyentes" */}
-                    {ch.cycleState === 'Cerrado' && ch.winnerPairCycle === 'Datos no concluyentes' && (
-                      <Box sx={{ marginTop: '10px', textAlign: 'center' }}>
-                        <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
-                          ¿No se puede determinar el ganador?
-                        </Typography>
-                        <Button
-                          variant="outlined"
-                          onClick={() => {
-                            // Asigna datos al abrir modal
-                            setManualWinnerCycle({
-                              id: cycles[ch.cycleNumber - 1].id,
-                              endDate: cycles[ch.cycleNumber - 1].endDate
-                            });
-                            setManualFirstPair(ch.firstPair);
-                            setManualSecondPair(ch.secondPair);
-                            setManualWinnerModalOpen(true);
-                          }}
-                          sx={{
-                            textTransform: 'none',
-                            mt: 1,
-                            borderColor: '#2196f3',
-                            color: '#2196f3'
-                          }}
-                        >
-                          Determinar ganador manualmente
-                        </Button>
-                      </Box>
-                    )}
-
-                    {(!ch.endDate || dayjs(ch.endDate).isAfter(dayjs())) &&
-                      currentCycle &&
-                      ch.cycleNumber === currentCycleNumber &&
-                      nextMatchDate && (
-                        <Box sx={{ mt: 1 }}>
-                          {lastMatch && (
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                              Último resultado del ciclo: {lastMatch.winner} ganaron contra {lastMatch.loser}{' '}
-                              el {dayjs(lastMatch.date, 'YYYY-MM-DD').format('DD/MM/YYYY')}
-                            </Typography>
-                          )}
-                          {nextMatchDate && !ch.endDate && (
-                            <>
-                              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>Próximo partido:</Typography>
-                              <Typography variant="body2">{nextMatchPairs}</Typography>
-                              <Typography variant="body2">
-                                Fecha: <strong>{nextMatchDate.format('DD/MM/YYYY')}</strong>
-                              </Typography>
-                              {nextMatchHour && (
-                                <Typography variant="body2">
-                                  Hora: <strong>{nextMatchHour}</strong>
-                                </Typography>
-                              )}
-                              <Typography variant="body2">
-                                Lugar: <strong>Passing Padel</strong>
-                              </Typography>
-                            </>
-                          )}
-                        </Box>
-                      )}
-                  </Box>
-                );
-              })}
-
-              {sortedCycles.length > cyclesPerPage && (
-                <Pagination
-                  count={Math.ceil(sortedCycles.length / cyclesPerPage)}
-                  page={cyclesCurrentPage}
-                  onChange={(e, value) => setCyclesCurrentPage(value)}
-                  sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}
-                />
-              )}
-            </>
-          );
-        })()}
-      </Box>
-
-      <Box sx={{ textAlign: 'center', marginTop: '30px', marginBottom: '20px' }}>
-        <Button
-          variant="contained"
-          sx={{
-            backgroundColor: 'black',
-            color: 'white',
-            borderRadius: '30px',
-            padding: '10px 20px',
-            textTransform: 'none',
-            '&:hover': {
-              backgroundColor: '#333',
-            },
-          }}
-          onClick={() => navigate('/')}
-        >
-          Volver a la pantalla principal
-        </Button>
-      </Box>
-
-      {/* Modal para elegir ganador manual de un ciclo */}
-      <Modal open={manualWinnerModalOpen} onClose={() => setManualWinnerModalOpen(false)}>
-        <Box sx={styleModal}>
-          <IconButton
-            sx={{ position: 'absolute', top: 5, right: 5, color: 'red' }}
-            onClick={() => setManualWinnerModalOpen(false)}
-          >
-            <CloseIcon />
-          </IconButton>
-          <Typography variant="h6">Seleccionar Ganador del Ciclo</Typography>
-          <Typography variant="body1" sx={{ mt: 2 }}>
-            Elige la pareja ganadora:
-          </Typography>
-          <FormControl fullWidth sx={{ mt: 2 }}>
+      <Modal open={manualWinnerModal.open} onClose={() => handleModalClose(setManualWinnerModal)}>
+        <Paper sx={MODAL_STYLE}>
+          <IconButton onClick={() => handleModalClose(setManualWinnerModal)} sx={{ position: 'absolute', top: 8, right: 8 }}><CloseIcon /></IconButton>
+          <Typography variant="h6">Seleccionar Ganador del Ciclo Manualmente</Typography>
+          <Typography sx={{ mt: 1 }}>Ciclo: {manualWinnerModal.cycle?.currentPairs} ({manualWinnerModal.cycle ? dayjs(manualWinnerModal.cycle.startDate).format('DD/MM/YY') : ''})</Typography>
+          <FormControl fullWidth margin="normal">
             <InputLabel>Pareja Ganadora</InputLabel>
-            <Select
-              value={manualWinnerPair}
-              onChange={(e) => setManualWinnerPair(e.target.value)}
-              label="Pareja Ganadora"
-            >
-              <MenuItem value={manualFirstPair}>{manualFirstPair}</MenuItem>
-              <MenuItem value={manualSecondPair}>{manualSecondPair}</MenuItem>
+            <Select value={manualWinnerModal.winnerPair} label="Pareja Ganadora" onChange={e => setManualWinnerModal(p => ({ ...p, winnerPair: e.target.value }))}>
+              <MenuItem value=""><em>-- Seleccionar --</em></MenuItem>
+              {manualWinnerModal.firstPair && <MenuItem value={manualWinnerModal.firstPair}>{manualWinnerModal.firstPair}</MenuItem>}
+              {manualWinnerModal.secondPair && <MenuItem value={manualWinnerModal.secondPair}>{manualWinnerModal.secondPair}</MenuItem>}
             </Select>
           </FormControl>
-          <Box sx={{ textAlign: 'right', mt: 2 }}>
-            <Button variant="contained" onClick={handleManualWinnerSave}>
-              Guardar
-            </Button>
-          </Box>
-        </Box>
+          <Box sx={{ textAlign: 'right', mt: 3 }}><Button onClick={() => handleModalClose(setManualWinnerModal)} sx={{ mr: 1 }}>Cancelar</Button><Button variant="contained" onClick={handleManualWinnerSave} disabled={!manualWinnerModal.winnerPair}>Guardar y Cerrar Ciclo</Button></Box>
+        </Paper>
       </Modal>
+
+      <Box sx={{ textAlign: 'center', my: 4 }}>
+        <Button variant="contained" sx={{ bgcolor: 'black', color: 'white', borderRadius: '20px', px: 3, '&:hover': { bgcolor: 'grey.800' } }} onClick={() => navigate('/')}>
+          Volver a Pantalla Principal
+        </Button>
+      </Box>
     </Container>
   );
 };
+
 export default MatchInfo;
