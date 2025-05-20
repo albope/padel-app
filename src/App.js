@@ -11,6 +11,7 @@ import ScrollToTop from './components/ScrollToTop';
 import StatsCharts from './components/StatsCharts';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { createTheme, ThemeProvider } from '@mui/material/styles';
 
 const App = () => {
   return (
@@ -39,5 +40,24 @@ const App = () => {
     </LocalizationProvider>
   );
 };
+
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#1976d2', // Un azul
+    },
+    secondary: {
+      main: '#dc004e', // Un rosa/rojo
+    },
+    // Puedes añadir más personalizaciones aquí
+  },
+  typography: {
+    fontFamily: '"Montserrat", "Roboto", "Helvetica", "Arial", sans-serif',
+    h4: {
+        fontWeight: 700,
+    },
+    // ... otras variantes
+  }
+});
 
 export default App;
