@@ -206,7 +206,7 @@ const HomePage = () => {
             onClick={toggleDrawer(true)}
             aria-label="Ver información de la temporada"
             sx={{
-              backgroundColor: theme.palette.secondary.main, // Usar color secundario del tema
+              backgroundColor: '#007BFF', // Usar color secundario del tema
               color: theme.palette.secondary.contrastText,
               borderRadius: '50%',
               padding: '16px', // Un poco más grande
