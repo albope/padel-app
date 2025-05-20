@@ -1020,7 +1020,7 @@ const MatchInfo = () => {
       </Modal>
 
       <Box sx={{ textAlign: 'center', my: 4 }}>
-        <Button variant="contained" sx={{ bgcolor: 'black', color: 'white', borderRadius: '20px', px: 3, '&:hover': { bgcolor: 'grey.800' } }} onClick={() => navigate('/')}>
+        <Button variant="contained" sx={{ bgcolor: 'black', color: 'white', borderRadius: '20px', px: 3, textTransform: 'none', '&:hover': { bgcolor: 'grey.800' } }} onClick={() => navigate('/')}>
           Volver a Pantalla Principal
         </Button>
       </Box>

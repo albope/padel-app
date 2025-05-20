@@ -100,7 +100,7 @@ const HomePage = () => {
             createdAt: createdAtDateObject,
           });
         });
-        
+
         fetchedResults.sort((a, b) => b.date.getTime() - a.date.getTime());
 
         setTotalGamesByYear(gamesByYear);
@@ -158,7 +158,7 @@ const HomePage = () => {
   return (
     // Usar un Box como contenedor principal para aplicar un fondo si se desea
     <Box sx={{ backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[100], minHeight: '100vh' }}>
-      <Container maxWidth="md" disableGutters sx={{pb: 8}}> {/* Aumentamos maxWidth y añadimos padding bottom */}
+      <Container maxWidth="md" disableGutters sx={{ pb: 8 }}> {/* Aumentamos maxWidth y añadimos padding bottom */}
         <Box
           sx={{
             // Podríamos añadir un degradado sutil o una imagen de fondo aquí
@@ -176,18 +176,24 @@ const HomePage = () => {
         >
           <Box
             component="img"
-            src={`${process.env.PUBLIC_URL}/pelota-de-padel.ico`} // Asegúrate que este icono sea de buena calidad
+            src={`${process.env.PUBLIC_URL}/pelota-de-padel.ico`}
             alt="Logo Padel Mas Camarena"
-            sx={{ height: { xs: '35px', sm: '45px' }, mr: 2 }} // Tamaño responsivo y más margen
+            sx={{
+              height: { xs: '48px', sm: '64px' }, // O los valores mayores que probaste
+              width: 'auto', // Importante para mantener la proporción
+              mr: 2
+            }}
           />
           <Typography
-            variant="h4" // Un poco más grande
+            variant="h3"
             component="h1"
             sx={{
-              fontWeight: '700', // Más bold
-              letterSpacing: '0.5px', // Ajustar espaciado
-              color: theme.palette.text.primary, // Usar color del tema
-              fontFamily: '"Montserrat", "Roboto", "Helvetica", "Arial", sans-serif', // Fuente más moderna (asegúrate de importarla)
+              fontWeight: 'bold',
+              letterSpacing: { xs: '-0.5px', sm: '-1px' },
+              color: 'inherit',
+              fontFamily: '"Inter", "Montserrat", "Roboto", "Helvetica", "Arial", sans-serif', // Priorizamos "Inter" si la has importado.
+              lineHeight: 1.2,
+              flexGrow: 1,
             }}
           >
             Padel Mas Camarena
@@ -195,13 +201,13 @@ const HomePage = () => {
         </Box>
 
         {/* ResultsList podría estar dentro de un Paper para darle elevación */}
-        <Box sx={{ px: { xs: 1, sm: 2} }}> {/* Padding horizontal para ResultsList */}
-             <ResultsList results={results} /> {/* Pasar todos los resultados */}
+        <Box sx={{ px: { xs: 1, sm: 2 } }}> {/* Padding horizontal para ResultsList */}
+          <ResultsList results={results} /> {/* Pasar todos los resultados */}
         </Box>
 
 
         {/* Botón flotante mejorado */}
-        <Box sx={{ position: 'fixed', bottom: {xs: 70, sm:30}, right: {xs: 16, sm:30} }}> {/* Ajustar posición para evitar footer si hay */}
+        <Box sx={{ position: 'fixed', bottom: { xs: 70, sm: 30 }, right: { xs: 16, sm: 30 } }}> {/* Ajustar posición para evitar footer si hay */}
           <Button
             onClick={toggleDrawer(true)}
             aria-label="Ver información de la temporada"
@@ -240,7 +246,7 @@ const HomePage = () => {
           <Box
             sx={{
               pt: 4, // Padding top para dejar espacio al "puller"
-              px: {xs: 2, sm: 3}, // Padding horizontal responsivo
+              px: { xs: 2, sm: 3 }, // Padding horizontal responsivo
               fontFamily: '"Roboto", sans-serif',
               color: theme.palette.text.primary,
             }}
@@ -276,7 +282,7 @@ const HomePage = () => {
               </Typography>
               {Object.keys(totalGamesByYear).length > 0 ? (
                 <List dense>
-                  {Object.keys(totalGamesByYear).sort((a,b) => Number(b) - Number(a)).map((year) => (
+                  {Object.keys(totalGamesByYear).sort((a, b) => Number(b) - Number(a)).map((year) => (
                     <ListItem key={year} sx={{ py: 0.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
                       <ListItemText
                         primary={year}
@@ -288,7 +294,7 @@ const HomePage = () => {
                 </List>
               ) : <Typography variant="body2" color="text.secondary">No hay datos.</Typography>}
             </Box>
-            
+
             <Divider sx={{ my: 3 }} />
 
             {/* Localizaciones */}
