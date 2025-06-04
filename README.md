@@ -76,6 +76,20 @@ npm run build: Construye la aplicación para producción en la carpeta build.
 npm run test: Ejecuta las pruebas unitarias.
 firebase deploy: Despliega la aplicación en Firebase Hosting.
 
+## Pruebas
+
+Antes de ejecutar `npm test`, asegúrate de instalar las dependencias:
+
+```bash
+npm install
+```
+
+Esto instalará `react-scripts`, necesario para el comando de pruebas.
+
+```bash
+npm test
+```
+
 ## Contribuir
 
 Las contribuciones son bienvenidas. Si encuentras algún problema o tienes sugerencias para mejorar el proyecto, abre un issue o envía un pull request.
