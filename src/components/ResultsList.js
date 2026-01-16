@@ -5,29 +5,22 @@ import { deleteDoc, doc, addDoc, updateDoc, serverTimestamp, collection } from '
 import { db } from '../firebase';
 
 import {
-    Typography, Container, Grid, Card, CardContent, CardActions, Box, Button,
+    Typography, Grid, Card, CardContent, CardActions, Box, Button,
     FormControl, Select, MenuItem, InputLabel, IconButton, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, Paper, TextField,
-    CircularProgress, Alert, useTheme, Chip, Tooltip // Añadidos
+    CircularProgress, useTheme, Chip, Tooltip
 } from '@mui/material';
-import { EmojiEvents, Star, Sports, Flag, Edit, ContentCopy } from '@mui/icons-material';
+import { EmojiEvents, Star, Edit, ContentCopy } from '@mui/icons-material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShareIcon from '@mui/icons-material/Share';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import InfoIcon from '@mui/icons-material/Info';
-import LeaderboardIcon from '@mui/icons-material/Leaderboard';
-import MilitaryTechIcon from '@mui/icons-material/MilitaryTech';
-import BarChartIcon from '@mui/icons-material/BarChart';
 
 import dayjs from 'dayjs';
-import { useNavigate } from 'react-router-dom';
 
 // Props que esperamos: results (array de todos los resultados)
 const ResultsList = ({ results: allResults }) => {
     const theme = useTheme();
-    const navigate = useNavigate();
 
     // Estados para el filtrado y paginación
     const [filteredResults, setFilteredResults] = useState([]);
@@ -275,13 +268,6 @@ ${winnerText}`;
         );
     }
     
-    const navigationButtons = [
-        { label: 'Añadir Resultado', icon: <AddCircleOutlineIcon />, path: '/add-result', color: 'primary' },
-        { label: 'Info Partidas', icon: <InfoIcon />, path: '/info', color: 'info' },
-        { label: 'Ranking', icon: <LeaderboardIcon />, path: '/players', color: 'success' },
-        { label: 'Insignias', icon: <MilitaryTechIcon />, path: '/insignias', color: 'warning' },
-        { label: 'Estadísticas', icon: <BarChartIcon />, path: '/stats-charts', color: 'secondary' }
-    ];
 
     return (
         <Box sx={{ width: '100%' }}>
@@ -508,33 +494,6 @@ ${winnerText}`;
                 </Box>
             )}
             
-            <Paper elevation={3} sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000, borderTop: `1px solid ${theme.palette.divider}` }}>
-                <Grid container spacing={0} justifyContent="center">
-                    {navigationButtons.map((item) => (
-                        <Grid item xs key={item.label} sx={{textAlign:'center'}}>
-                             <Button
-                                fullWidth
-                                variant="text"
-                                color={item.color || "inherit"}
-                                onClick={() => navigate(item.path)}
-                                sx={{ 
-                                    flexDirection: 'column', 
-                                    py: 1, 
-                                    px: 0.5,
-                                    borderRadius:0, 
-                                    minWidth: 'auto',
-                                    fontSize: '0.65rem', // Reducido para que quepan más
-                                    lineHeight: 1.2,
-                                    '& .MuiButton-startIcon': { margin: 0, mb: 0.3 } // Ajuste del icono
-                                }}
-                                startIcon={item.icon}
-                            >
-                                {item.label}
-                            </Button>
-                        </Grid>
-                    ))}
-                </Grid>
-            </Paper>
 
         </Box>
     );

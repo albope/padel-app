@@ -156,69 +156,27 @@ const HomePage = () => {
   }
 
   return (
-    // Usar un Box como contenedor principal para aplicar un fondo si se desea
-    <Box sx={{ backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[100], minHeight: '100vh' }}>
-      <Container maxWidth="md" disableGutters sx={{ pb: 8 }}> {/* Aumentamos maxWidth y añadimos padding bottom */}
-        <Box
-          sx={{
-            // Podríamos añadir un degradado sutil o una imagen de fondo aquí
-            // background: `linear-gradient(180deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-            // color: theme.palette.primary.contrastText, // Texto blanco si el fondo es oscuro
-            padding: theme.spacing(3, 2), // Espaciado más consistente
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textAlign: 'center',
-            // boxShadow: '0px 4px 12px rgba(0,0,0,0.05)', // Sombra sutil
-            borderBottom: `1px solid ${theme.palette.divider}`,
-            mb: 3, // Margen inferior
-          }}
-        >
-          <Box
-            component="img"
-            src={`${process.env.PUBLIC_URL}/pelota-de-padel.ico`}
-            alt="Logo Padel Mas Camarena"
-            sx={{
-              height: { xs: '48px', sm: '64px' }, // O los valores mayores que probaste
-              width: 'auto', // Importante para mantener la proporción
-              mr: 2
-            }}
-          />
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{
-              fontWeight: 'bold',
-              letterSpacing: { xs: '-0.5px', sm: '-1px' },
-              color: 'inherit',
-              fontFamily: '"Inter", "Montserrat", "Roboto", "Helvetica", "Arial", sans-serif', // Priorizamos "Inter" si la has importado.
-              lineHeight: 1.2,
-              flexGrow: 1,
-            }}
-          >
-            Padel Mas Camarena
-          </Typography>
+    <Box sx={{ backgroundColor: theme.palette.background.default }}>
+      <Container maxWidth="md" disableGutters sx={{ pb: 4 }}>
+        {/* ResultsList con padding horizontal */}
+        <Box sx={{ px: { xs: 1, sm: 2 }, pt: 2 }}>
+          <ResultsList results={results} />
         </Box>
 
-        {/* ResultsList podría estar dentro de un Paper para darle elevación */}
-        <Box sx={{ px: { xs: 1, sm: 2 } }}> {/* Padding horizontal para ResultsList */}
-          <ResultsList results={results} /> {/* Pasar todos los resultados */}
-        </Box>
-
-
-        {/* Botón flotante mejorado */}
-        <Box sx={{ position: 'fixed', bottom: { xs: 70, sm: 30 }, right: { xs: 16, sm: 30 } }}> {/* Ajustar posición para evitar footer si hay */}
+        {/* Botón flotante para drawer de resumen */}
+        <Box sx={{ position: 'fixed', bottom: 140, right: 16, zIndex: 1000 }}>
           <Button
             onClick={toggleDrawer(true)}
             aria-label="Ver información de la temporada"
             sx={{
-              backgroundColor: '#007BFF', // Usar color secundario del tema
-              color: theme.palette.secondary.contrastText,
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
               borderRadius: '50%',
-              padding: '16px', // Un poco más grande
-              boxShadow: theme.shadows[6], // Sombra más pronunciada
+              padding: '14px',
+              minWidth: 'auto',
+              boxShadow: theme.shadows[6],
               '&:hover': {
-                backgroundColor: theme.palette.secondary.dark,
+                backgroundColor: theme.palette.primary.dark,
               },
             }}
           >

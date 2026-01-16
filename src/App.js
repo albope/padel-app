@@ -1,26 +1,32 @@
 // App.js
-
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+
+// Theme
+import theme from './theme';
+
+// Components
+import Layout from './components/Layout';
+import ScrollToTop from './components/ScrollToTop';
 import HomePage from './components/HomePage';
 import ResultForm from './components/ResultForm';
 import MatchInfo from './components/MatchInfo';
 import Players from './components/Players';
 import Insignias from './components/Insignias';
-import ScrollToTop from './components/ScrollToTop';
 import StatsCharts from './components/StatsCharts';
-import { LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
 
 const App = () => {
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Router>
-        <ScrollToTop />
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          {/* Contenido de la app */}
-          <div style={{ flex: '1' }}>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <Router>
+          <ScrollToTop />
+          <Layout>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/add-result" element={<ResultForm />} />
@@ -29,35 +35,11 @@ const App = () => {
               <Route path="/insignias" element={<Insignias />} />
               <Route path="/stats-charts" element={<StatsCharts />} />
             </Routes>
-          </div>
-
-          {/* Footer común para todas las páginas */}
-          <footer style={{ textAlign: 'center', padding: '20px 0', backgroundColor: '#f1f1f1', color: '#333', fontSize: '14px', marginTop: '30px' }}>
-            © <strong>2024</strong> Made with <span style={{ fontSize: '16px' }}>❤️</span> by Alberto Bort
-          </footer>
-        </div>
-      </Router>
-    </LocalizationProvider>
+          </Layout>
+        </Router>
+      </LocalizationProvider>
+    </ThemeProvider>
   );
 };
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2', // Un azul
-    },
-    secondary: {
-      main: '#dc004e', // Un rosa/rojo
-    },
-    // Puedes añadir más personalizaciones aquí
-  },
-  typography: {
-    fontFamily: '"Montserrat", "Roboto", "Helvetica", "Arial", sans-serif',
-    h4: {
-        fontWeight: 700,
-    },
-    // ... otras variantes
-  }
-});
 
 export default App;
