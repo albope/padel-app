@@ -22,7 +22,6 @@ import ShowChartIcon from '@mui/icons-material/ShowChart';
 import WhatshotIcon from '@mui/icons-material/Whatshot';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 
 // --- FUNCIONES AUXILIARES (sin cambios respecto a la versión anterior) ---
@@ -84,7 +83,6 @@ const Insignias = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const playersList = useMemo(() => ['Lucas', 'Bort', 'Martin', 'Ricardo'], []);
-    const navigate = useNavigate();
 
     // --- NUEVO ESTADO PARA CONTROLAR EL TOOLTIP ABIERTO ---
     const [openTooltipKey, setOpenTooltipKey] = useState(null); // Almacenará una clave única tipo "playerName-achievementKey"
@@ -210,10 +208,16 @@ const Insignias = () => {
     }), []);
 
     const getBadgeColor = useCallback((level) => {
+        // Usar colores de badges del tema
+        const badgeColors = theme.palette.badges || {
+            bronze: '#cd7f32',
+            silver: '#c0c0c0',
+            gold: '#ffd700',
+        };
         switch (level) {
-            case 1: return '#cd7f32';
-            case 2: return '#c0c0c0';
-            case 3: return theme.palette.warning.main; 
+            case 1: return badgeColors.bronze;
+            case 2: return badgeColors.silver;
+            case 3: return badgeColors.gold;
             default: return theme.palette.grey[400];
         }
     }, [theme]);
@@ -325,26 +329,6 @@ const Insignias = () => {
                 </Box>
             ))}
 
-            <Box sx={{ textAlign: 'center', mt: 4, mb:2 }}>
-                <Button
-                    variant="contained"
-                    onClick={() => navigate('/')}
-                    sx={{
-                        backgroundColor: theme.palette.common.black, // Botón negro
-                        color: theme.palette.common.white,           // Texto blanco
-                        borderRadius: '30px',
-                        padding: '10px 30px',
-                        textTransform: 'none',
-                        fontWeight: 'bold',
-                        fontSize: '1rem',
-                        '&:hover': {
-                            backgroundColor: theme.palette.grey[800], // Hover gris oscuro
-                        },
-                    }}
-                >
-                    Volver a la Pantalla Principal
-                </Button>
-            </Box>
         </Container>
     );
 };

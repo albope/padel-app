@@ -12,7 +12,6 @@ import {
   ListItemText,
   OutlinedInput,
   TextField,
-  Button,
   Typography,
   Tabs,
   Tab,
@@ -29,12 +28,12 @@ import {
   Fade,
   Card,
   CardContent,
-  CardHeader, // Added
+  CardHeader,
   Popover,
   Divider,
   Tooltip,
   Pagination,
-  Skeleton, // Added
+  Skeleton,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { Bar, Pie, Line } from 'react-chartjs-2';
@@ -43,9 +42,7 @@ import { db } from '../firebase';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import 'chart.js/auto';
-import { useNavigate } from 'react-router-dom';
 // Icons
-import SearchIcon from '@mui/icons-material/Search';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import InfoIcon from '@mui/icons-material/InfoOutlined'; // Using Outlined version for consistency
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -123,7 +120,6 @@ const pieChartBaseOptions = (theme) => ({
 
 const StatsCharts = () => {
   const theme = useTheme();
-  const navigate = useNavigate();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Dynamic Chart Options based on Theme
@@ -858,26 +854,6 @@ const StatsCharts = () => {
         </Fade>
       )}
 
-      <Box sx={{ mt: theme.spacing(5), textAlign: 'center' }}>
-        <Button
-          variant="contained"
-          onClick={() => navigate('/')}
-          sx={{
-            backgroundColor: theme.palette.common.black, // Botón negro
-            color: theme.palette.common.white,           // Texto blanco
-            borderRadius: '30px',
-            padding: '10px 30px',
-            textTransform: 'none',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            '&:hover': {
-              backgroundColor: theme.palette.grey[800], // Hover gris oscuro
-            },
-          }}
-        >
-          Volver a la Pantalla Principal
-        </Button>
-      </Box>
     </Container>
   );
 };
