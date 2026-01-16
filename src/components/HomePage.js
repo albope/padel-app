@@ -1,181 +1,141 @@
-// src/components/HomePage.js
-import React, { useState, useCallback } from 'react';
+// HomePage.js
+
+import React, { useState, useCallback, useMemo } from 'react';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import {
-  Container, Typography, Box, Button, SwipeableDrawer,
-  List, ListItem, ListItemText, Divider, Skeleton, Alert,
-  Paper, useTheme, IconButton, Avatar
+  Container,
+  Typography,
+  Box,
+  Button,
+  SwipeableDrawer,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  CircularProgress,
+  Alert,
+  Paper,
+  useTheme,
 } from '@mui/material';
-import {
-  InfoOutlined as InfoOutlinedIcon,
-  Close as CloseIcon,
-  CalendarToday as CalendarTodayIcon,
-  LocationOn as LocationOnIcon,
-  ListAlt as ListAltIcon,
-  ArrowBack as ArrowBackIcon,
-  ArrowForward as ArrowForwardIcon,
-  Refresh as RefreshIcon,
-  SportsTennis as SportsTennisIcon,
-  Person as PersonIcon
-} from '@mui/icons-material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import CloseIcon from '@mui/icons-material/Close';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 
-import dayjs from 'dayjs';
-import { usePadelResults } from '../hooks/usePadelResults';
 import ResultsList from './ResultsList';
+import PullToRefresh from './PullToRefresh';
+import dayjs from 'dayjs';
 
-// Componente para las tarjetas de resultados en el drawer
-const ResultCard = ({ result, theme }) => (
-  <Paper key={result.id} elevation={0} sx={{ p: 2, mb: 1.5, bgcolor: theme.palette.action.hover, borderRadius: 3, display: 'flex', alignItems: 'center' }}>
-    <Avatar sx={{ bgcolor: theme.palette.primary.light, mr: 2 }}>
-      <SportsTennisIcon />
-    </Avatar>
-    <Box sx={{ flexGrow: 1 }}>
-      <Typography variant="subtitle2" fontWeight="bold">
-        {dayjs(result.date).format('dddd, D [de] MMMM YYYY')}
-      </Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-        <LocationOnIcon sx={{ fontSize: '1rem', color: 'text.secondary', mr: 0.5 }} />
-        <Typography variant="caption" color="text.secondary">
-          {result.location || 'Ubicación no registrada'}
-        </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-        <PersonIcon sx={{ fontSize: '1rem', color: 'text.secondary', mr: 0.5 }} />
-        <Typography variant="caption" color="text.secondary">
-          Añadido por: {result.addedBy || 'Anónimo'}
-        </Typography>
-      </Box>
-    </Box>
-  </Paper>
-);
+// Context
+import { useData } from '../context/DataContext';
+
+// Estilo para el "handle" del drawer
+const pullerSx = {
+  width: 30,
+  height: 6,
+  backgroundColor: (theme) => theme.palette.mode === 'light' ? 'grey.300' : 'grey.900',
+  borderRadius: 3,
+  position: 'absolute',
+  top: 8,
+  left: 'calc(50% - 15px)',
+};
+
 
 const HomePage = () => {
   const theme = useTheme();
+  const { results, gamesByYear, locations, loading, error, refreshData } = useData();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { results, stats, loading, error, refetch } = usePadelResults();
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const totalPages = Math.ceil(results.length / itemsPerPage);
-  const paginatedResults = results.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Handle pull to refresh
+  const handleRefresh = useCallback(async () => {
+    await refreshData();
+  }, [refreshData]);
 
   const toggleDrawer = useCallback((open) => (event) => {
-    if (event && event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) return;
+    if (event && event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) {
+      return;
+    }
     setDrawerOpen(open);
   }, []);
 
-  // Estado de carga (Skeleton UI)
+  // Memoizar cálculos de paginación
+  const totalPages = useMemo(() => Math.ceil(results.length / itemsPerPage), [results.length, itemsPerPage]);
+  const paginatedResults = useMemo(() =>
+    results.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+    [results, currentPage, itemsPerPage]
+  );
+
+  const handleNextPage = useCallback(() => {
+    if (currentPage < totalPages) {
+      setCurrentPage((prevPage) => prevPage + 1);
+    }
+  }, [currentPage, totalPages]);
+
+  const handlePreviousPage = useCallback(() => {
+    if (currentPage > 1) {
+      setCurrentPage((prevPage) => prevPage - 1);
+    }
+  }, [currentPage]);
+
   if (loading) {
     return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-         <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4, alignItems: 'center' }}>
-            <Skeleton variant="circular" width={50} height={50} sx={{ mr: 2 }} />
-            <Skeleton variant="text" width={250} height={60} />
-         </Box>
-         <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 2, mb: 2 }} />
-         <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 2, mb: 2 }} />
-         <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 2 }} />
+      <Container maxWidth="sm" sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 120px)', py: 4 }}>
+        <CircularProgress />
+        <Typography variant="h6" sx={{ mt: 2, color: 'text.secondary' }}>Cargando Partidas...</Typography>
       </Container>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth="sm" sx={{ mt: 4 }}>
-        <Alert severity="error" action={
-          <Button color="inherit" size="small" onClick={refetch}>Reintentar</Button>
-        }>{error}</Alert>
+      <Container maxWidth="sm" sx={{ textAlign: 'center', py: 4 }}>
+        <Alert severity="error" sx={{ justifyContent: 'center' }}>{error}</Alert>
       </Container>
     );
   }
 
-  // Header moderno con degradado
-  const headerStyle = {
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-    background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-    color: theme.palette.common.white,
-    padding: theme.spacing(3),
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    boxShadow: '0px 4px 20px rgba(0,0,0,0.1)',
-    borderRadius: '0 0 20px 20px',
-    mb: 3,
-  };
-
   return (
-    <Box sx={{ 
-        backgroundColor: theme.palette.mode === 'dark' ? '#121212' : '#f5f5f5', 
-        minHeight: '100vh', 
-        pb: 15 // <--- AUMENTADO: De 10 a 15 para dar más espacio de scroll al final
-    }}>
-      <Container maxWidth="md" disableGutters>
-        
-        {/* HEADER PEGAJOSO MEJORADO */}
-        <Box sx={headerStyle}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Box
-              component="img"
-              src={`${process.env.PUBLIC_URL}/pelota-de-padel.ico`}
-              alt="Logo"
-              sx={{ height: 50, width: 'auto', mr: 2, filter: 'brightness(0) invert(1)' }} // Icono blanco
-            />
-            <Box>
-              <Typography
-                variant="h4"
-                component="h1"
-                sx={{
-                  fontWeight: 800,
-                  fontSize: { xs: '1.5rem', sm: '2rem' },
-                  letterSpacing: '-1px',
-                }}
-              >
-                Padel Mas Camarena
-              </Typography>
-              <Typography variant="subtitle2" sx={{ opacity: 0.9 }}>Tu comunidad de pádel</Typography>
-            </Box>
+    <Box sx={{ backgroundColor: theme.palette.background.default }}>
+      <PullToRefresh onRefresh={handleRefresh}>
+        <Container maxWidth="md" disableGutters sx={{ pb: 4 }}>
+          {/* ResultsList con padding horizontal */}
+          <Box sx={{ px: { xs: 1, sm: 2 }, pt: 2 }}>
+            <ResultsList results={results} />
           </Box>
-          <IconButton onClick={refetch} size="small" sx={{ color: 'inherit', backgroundColor: 'rgba(255,255,255,0.1)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' } }}>
-            <RefreshIcon fontSize="small" />
-          </IconButton>
-        </Box>
 
-        {/* LISTA DE RESULTADOS */}
-        <Box sx={{ px: { xs: 2, sm: 3 } }}>
-           <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: theme.palette.text.primary }}>Resultados Recientes</Typography>
-           <ResultsList results={results} />
-        </Box>
-
-        {/* BOTÓN FLOTANTE (FAB) - CORREGIDO POSICIÓN */}
-        <Box sx={{ 
-            position: 'fixed', 
-            bottom: { xs: 75, sm: 40 }, // <--- BAJADO: De 90 a 75 para pegarlo más a la barra
-            right: 30, 
-            zIndex: 11 
-        }}>
+        {/* Botón flotante para drawer de resumen - Premium Gold */}
+        <Box sx={{ position: 'fixed', bottom: 100, left: 16, zIndex: 1000 }}>
           <Button
             onClick={toggleDrawer(true)}
-            variant="contained"
-            color="secondary"
+            aria-label="Ver información de la temporada"
             sx={{
-              borderRadius: '50px',
-              padding: '12px 24px',
-              boxShadow: theme.shadows[6],
-              textTransform: 'none',
-              fontSize: '1rem',
-              display: 'flex',
-              gap: 1,
-              alignItems: 'center',
-              background: `linear-gradient(45deg, ${theme.palette.secondary.main}, ${theme.palette.secondary.light})`
+              background: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.secondary.dark} 100%)`,
+              color: theme.palette.secondary.contrastText,
+              borderRadius: '50%',
+              padding: '14px',
+              minWidth: 'auto',
+              boxShadow: theme.shadows[16], // Gold glow
+              border: `2px solid ${theme.palette.secondary.light}`,
+              transition: 'all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+              '&:hover': {
+                background: `linear-gradient(135deg, ${theme.palette.secondary.light} 0%, ${theme.palette.secondary.main} 100%)`,
+                transform: 'scale(1.1) rotate(15deg)',
+                boxShadow: theme.shadows[18], // Championship glow
+              },
+              '&:active': {
+                transform: 'scale(0.95)',
+              },
             }}
           >
-            <InfoOutlinedIcon />
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'block' } }}>Estadísticas</Box>
+            <InfoOutlinedIcon fontSize="large" />
           </Button>
         </Box>
 
-        {/* DRAWER DE ESTADÍSTICAS */}
+        {/* Bottom Sheet con estilo Premium "Court of Gold" */}
         <SwipeableDrawer
           anchor="bottom"
           open={drawerOpen}
@@ -183,80 +143,273 @@ const HomePage = () => {
           onOpen={toggleDrawer(true)}
           PaperProps={{
             sx: {
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              boxShadow: theme.shadows[20], // Maximum drama
+              pb: 2,
               maxHeight: '85vh',
+              backgroundColor: theme.palette.background.paper,
+              borderTop: `3px solid ${theme.palette.secondary.main}`,
+              backgroundImage: `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
             }
           }}
         >
-          <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center', pt: 2, pb: 1 }}>
-             <Box sx={{ width: 40, height: 6, bgcolor: 'grey.300', borderRadius: 3 }} />
-          </Box>
+          <Box sx={pullerSx} /> {/* Handle visual */}
+          <Box
+            sx={{
+              pt: 4, // Padding top para dejar espacio al "puller"
+              px: { xs: 2, sm: 3 }, // Padding horizontal responsivo
+              fontFamily: '"Roboto", sans-serif',
+              color: theme.palette.text.primary,
+            }}
+            role="presentation"
+          >
+            <Button
+              aria-label="Cerrar"
+              onClick={toggleDrawer(false)}
+              sx={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                color: theme.palette.secondary.main,
+                backgroundColor: 'transparent',
+                minWidth: 'auto',
+                padding: '8px',
+                '&:hover': {
+                  backgroundColor: `rgba(212, 175, 55, 0.1)`,
+                  transform: 'rotate(90deg)',
+                },
+                transition: 'all 0.3s ease',
+              }}
+            >
+              <CloseIcon />
+            </Button>
 
-          <Box sx={{ px: 3, pb: 4, overflow: 'auto' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h5" fontWeight="bold">Resumen de Temporada</Typography>
-                <IconButton onClick={toggleDrawer(false)}><CloseIcon /></IconButton>
-            </Box>
+            <Typography
+              variant="h4"
+              component="h2"
+              gutterBottom
+              sx={{
+                fontWeight: '700',
+                textAlign: 'center',
+                mb: 3,
+                color: theme.palette.secondary.main,
+                fontFamily: 'Bebas Neue, Impact, sans-serif',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Resumen de la Temporada
+            </Typography>
 
+            {/* Partidos jugados por año */}
             <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: 1, color: theme.palette.primary.main }}>
-                <CalendarTodayIcon sx={{ mr: 1, fontSize: '1.2rem' }} /> Partidos por Año
+              <Typography variant="subtitle1" sx={{
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                mb: 1.5,
+                color: theme.palette.text.primary,
+                fontSize: '1rem',
+              }}>
+                <CalendarTodayIcon sx={{ mr: 1, color: theme.palette.secondary.main, fontSize: '1.25rem' }} />
+                Partidos por Año
               </Typography>
-              {Object.keys(stats.gamesByYear).length > 0 ? (
-                 <List dense disablePadding>
-                  {Object.entries(stats.gamesByYear).sort((a, b) => b[0] - a[0]).map(([year, count]) => (
-                    <ListItem key={year} divider sx={{ px: 0 }}>
-                      <ListItemText primary={year} primaryTypographyProps={{fontWeight: 'medium'}} />
-                      <Typography fontWeight="bold">{count} partidos</Typography>
+              {Object.keys(gamesByYear).length > 0 ? (
+                <List dense>
+                  {Object.keys(gamesByYear).sort((a, b) => Number(b) - Number(a)).map((year) => (
+                    <ListItem
+                      key={year}
+                      sx={{
+                        py: 1,
+                        px: 2,
+                        mb: 0.5,
+                        borderRadius: 1,
+                        border: `1px solid ${theme.palette.divider}`,
+                        backgroundColor: theme.palette.background.default,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          borderColor: theme.palette.secondary.main,
+                          backgroundColor: theme.palette.background.paper,
+                        }
+                      }}
+                    >
+                      <ListItemText
+                        primary={year}
+                        secondary={`${gamesByYear[year]} partidos`}
+                        primaryTypographyProps={{
+                          fontWeight: '600',
+                          color: theme.palette.text.primary,
+                        }}
+                        secondaryTypographyProps={{
+                          color: theme.palette.text.secondary,
+                        }}
+                      />
                     </ListItem>
                   ))}
-                 </List>
-              ) : <Typography variant="body2" color="text.secondary">Sin datos.</Typography>}
-            </Box>
-            
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: 1, color: theme.palette.primary.main }}>
-                <LocationOnIcon sx={{ mr: 1, fontSize: '1.2rem' }} /> Ubicaciones
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                 {stats.locations.length > 0 ? stats.locations.slice(0,5).map((loc, idx) => (
-                    <Paper key={idx} variant="outlined" sx={{ px: 1.5, py: 0.5, borderRadius: 4, bgcolor: 'background.default' }}>
-                        <Typography variant="body2">{loc}</Typography>
-                    </Paper>
-                 )) : <Typography variant="body2" color="text.secondary">Sin datos.</Typography>}
-              </Box>
+                </List>
+              ) : <Typography variant="body2" color="text.secondary">No hay datos.</Typography>}
             </Box>
 
             <Divider sx={{ my: 3 }} />
 
-            <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', mb: 2, color: theme.palette.primary.main }}>
-                    <ListAltIcon sx={{ mr: 1, fontSize: '1.2rem' }} /> Registro Reciente
-                </Typography>
-                
-                {paginatedResults.map(result => (
-                    <ResultCard key={result.id} result={result} theme={theme} />
-                ))}
-                
-                {results.length > itemsPerPage && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 2, alignItems: 'center' }}>
-                        <Button size="small" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1} startIcon={<ArrowBackIcon />}>
-                            Ant.
-                        </Button>
-                        <Typography variant="caption" color="text.secondary">
-                            {currentPage} / {totalPages}
-                        </Typography>
-                        <Button size="small" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages} endIcon={<ArrowForwardIcon />}>
-                            Sig.
-                        </Button>
-                    </Box>
-                )}
+            {/* Localizaciones */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" sx={{
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                mb: 1.5,
+                color: theme.palette.text.primary,
+                fontSize: '1rem',
+              }}>
+                <LocationOnIcon sx={{ mr: 1, color: theme.palette.secondary.main, fontSize: '1.25rem' }} />
+                Localizaciones Frecuentes
+              </Typography>
+              {locations.length > 0 ? (
+                <List dense>
+                  {locations.slice(0, 5).map((location, index) => (
+                    <ListItem
+                      key={index}
+                      sx={{
+                        py: 1,
+                        px: 2,
+                        mb: 0.5,
+                        borderRadius: 1,
+                        border: `1px solid ${theme.palette.divider}`,
+                        backgroundColor: theme.palette.background.default,
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                          borderColor: theme.palette.secondary.main,
+                          backgroundColor: theme.palette.background.paper,
+                        }
+                      }}
+                    >
+                      <ListItemText
+                        primary={location}
+                        primaryTypographyProps={{
+                          fontWeight: '500',
+                          color: theme.palette.text.primary,
+                        }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : <Typography variant="body2" color="text.secondary">No hay datos.</Typography>}
             </Box>
 
+            <Divider sx={{ my: 3 }} />
+
+            {/* Resultados Añadidos */}
+            <Box>
+              <Typography variant="subtitle1" sx={{
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                mb: 1.5,
+                color: theme.palette.text.primary,
+                fontSize: '1rem',
+              }}>
+                <ListAltIcon sx={{ mr: 1, color: theme.palette.secondary.main, fontSize: '1.25rem' }} />
+                Últimos Resultados Registrados
+              </Typography>
+              {paginatedResults.length > 0 ? (
+                <List>
+                  {paginatedResults.map((result) => (
+                    <Paper
+                      key={result.id}
+                      elevation={2}
+                      sx={{
+                        mb: 1.5,
+                        p: 2,
+                        borderRadius: 2,
+                        border: `1px solid ${theme.palette.divider}`,
+                        backgroundColor: theme.palette.background.paper,
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          borderColor: theme.palette.secondary.main,
+                          transform: 'translateX(4px)',
+                          boxShadow: theme.shadows[4],
+                        }
+                      }}
+                    >
+                      <ListItemText
+                        primary={`${dayjs(result.date).format('dddd, D [de] MMMM YYYY')}`}
+                        secondary={
+                          <>
+                            <Typography component="span" variant="body2" sx={{ color: theme.palette.text.primary, fontWeight: 500 }}>
+                              📍 {result.location || 'Desconocido'}
+                            </Typography>
+                            <br />
+                            <Typography component="span" variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                              Añadido por: {result.addedBy || 'N/A'}
+                              {result.createdAt && ` el ${dayjs(result.createdAt).format('D/MM/YY HH:mm')}`}
+                            </Typography>
+                          </>
+                        }
+                        primaryTypographyProps={{
+                          fontWeight: '600',
+                          mb: 0.5,
+                          color: theme.palette.text.primary,
+                        }}
+                      />
+                    </Paper>
+                  ))}
+                </List>
+              ) : <Typography variant="body2" color="text.secondary">No hay resultados en esta página.</Typography>}
+            </Box>
+
+            {/* Paginación Premium */}
+            {results.length > itemsPerPage && (
+              <Box sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 3,
+                p: 2,
+                backgroundColor: theme.palette.background.default,
+                borderRadius: 2,
+                border: `1px solid ${theme.palette.divider}`,
+              }}>
+                <Button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  startIcon={<ArrowBackIcon />}
+                  sx={{
+                    color: theme.palette.text.primary,
+                    '&:disabled': {
+                      color: theme.palette.text.disabled,
+                    }
+                  }}
+                >
+                  Anterior
+                </Button>
+                <Typography variant="body2" sx={{
+                  color: theme.palette.secondary.main,
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                }}>
+                  Pág. {currentPage} de {totalPages}
+                </Typography>
+                <Button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  endIcon={<ArrowForwardIcon />}
+                  sx={{
+                    color: theme.palette.text.primary,
+                    '&:disabled': {
+                      color: theme.palette.text.disabled,
+                    }
+                  }}
+                >
+                  Siguiente
+                </Button>
+              </Box>
+            )}
           </Box>
         </SwipeableDrawer>
       </Container>
+      </PullToRefresh>
     </Box>
   );
 };

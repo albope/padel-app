@@ -1,4 +1,4 @@
-// src/components/Players.js
+// Players.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Container,
@@ -6,36 +6,35 @@ import {
   Box,
   Grid,
   Card,
-  CardContent,
   CardMedia,
   Button,
   Modal,
   Backdrop,
   Fade,
-  IconButton,
   useTheme,
-  Paper,
   Slider,
+  CircularProgress,
   Alert,
-  Skeleton,
-  Avatar,
-  Divider
+  Fab,
+  alpha
 } from '@mui/material';
-import {
-  EmojiEvents as EmojiEventsIcon,
-  ArrowDropDown as ArrowDropDownIcon,
-  PhotoCamera as PhotoCameraIcon,
-  ArrowBack as ArrowBackIcon,
-  SportsTennis as SportsTennisIcon
-} from '@mui/icons-material';
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import { useNavigate } from 'react-router-dom';
+
+// Theme tokens
+import { tokens } from '../theme';
 import dayjs from 'dayjs';
 import Cropper from 'react-easy-crop';
 
-// Importamos el Hook para datos centralizados
-import { usePadelResults } from '../hooks/usePadelResults';
+// Context
+import { useData } from '../context/DataContext';
 
-// --- DATOS ESTÁTICOS ---
+// New components
+import PlayerCard from './PlayerCard';
+import PlayerComparison from './PlayerComparison';
+import PlayerCardSkeleton from './skeletons/PlayerCardSkeleton';
+
 const playersInfo = {
   Ricardo: { name: 'Ricardo', image: '/Ricardo.jpg', position: 'Revés', birthDate: '26/11/1994', height: '1.80 m', birthPlace: 'Madrid', country: 'ESP', flag: '/spain_flag.jpg' },
   Bort: { name: 'Bort', image: '/Alberto.jpg', position: 'Derecha', birthDate: '27/01/1994', height: '1.80 m', birthPlace: 'Valencia', country: 'ESP', flag: '/spain_flag.jpg' },
@@ -43,419 +42,599 @@ const playersInfo = {
   Martin: { name: 'Martin', image: '/Martin.jpg', position: 'Revés', birthDate: '18/02/1994', height: '1.84 m', birthPlace: 'Valencia', country: 'ESP', flag: '/spain_flag.jpg' },
 };
 
-// --- FUNCIONES DE AYUDA ---
-const normalizePairKey = (player1, player2) => [player1, player2].sort().join(' & ');
+// --- FUNCIONES DE CÁLCULO (sin cambios en su lógica interna) ---
+const calculateRanking = (players) => {
+  // Filtra jugadores sin gamesPlayed antes de ordenar para evitar errores con 'efficiency'
+  const playablePlayers = players.filter(p => p.gamesPlayed && p.gamesPlayed > 0);
+  const nonPlayablePlayers = players.filter(p => !p.gamesPlayed || p.gamesPlayed === 0);
+
+  playablePlayers.sort((a, b) => {
+    const efficiencyA = parseFloat(a.efficiency) || 0;
+    const efficiencyB = parseFloat(b.efficiency) || 0;
+    const gamesWonA = a.gamesWon || 0;
+    const gamesWonB = b.gamesWon || 0;
+
+    const efficiencyDiff = efficiencyB - efficiencyA;
+    if (efficiencyDiff !== 0) return efficiencyDiff;
+    return gamesWonB - gamesWonA;
+  });
+  return [...playablePlayers, ...nonPlayablePlayers]; // Mantener jugadores sin juegos al final
+};
+
+const calculatePairRanking = (pairs) => {
+  const playablePairs = pairs.filter(p => p.gamesPlayed && p.gamesPlayed > 0);
+  const nonPlayablePairs = pairs.filter(p => !p.gamesPlayed || p.gamesPlayed === 0);
+
+  playablePairs.sort((a, b) => {
+    const efficiencyA = parseFloat(a.efficiency) || 0;
+    const efficiencyB = parseFloat(b.efficiency) || 0;
+    const gamesWonA = a.gamesWon || 0;
+    const gamesWonB = b.gamesWon || 0;
+
+    const efficiencyDiff = efficiencyB - efficiencyA;
+    if (efficiencyDiff !== 0) return efficiencyDiff;
+    return gamesWonB - gamesWonA;
+  });
+  return [...playablePairs, ...nonPlayablePairs];
+};
+const normalizePairKey = (player1, player2) => [player1, player2].sort().join('-');
 
 const calculateConsecutiveWins = (results, player) => {
-  const sortedResults = [...results].sort((a, b) => a.date - b.date);
   let consecutiveWins = 0;
+  // let maxConsecutiveWins = 0; // No se usa para devolver la racha *actual*
   let lastGameWon = false;
+  // Asegurar que 'results' es un array antes de ordenar
+  const sortedResults = Array.isArray(results) ? [...results].sort((a, b) => dayjs(a.date).diff(dayjs(b.date))) : [];
 
   sortedResults.forEach((result) => {
     const { pair1, pair2, sets } = result;
-    if (!sets) return;
-
-    let pair1Wins = 0;
-    let pair2Wins = 0;
-    sets.forEach(s => {
-       if(parseInt(s.pair1Score) > parseInt(s.pair2Score)) pair1Wins++;
-       else if(parseInt(s.pair2Score) > parseInt(s.pair1Score)) pair2Wins++;
-    });
-
     let playerWonCurrentGame = false;
-    const isP1 = pair1.player1 === player || pair1.player2 === player;
-    const isP2 = pair2.player1 === player || pair2.player2 === player;
+    let pair1SetWins = 0;
+    let pair2SetWins = 0;
 
-    if (isP1 && pair1Wins > pair2Wins) playerWonCurrentGame = true;
-    if (isP2 && pair2Wins > pair1Wins) playerWonCurrentGame = true;
+    if (Array.isArray(sets)) {
+      sets.forEach((set) => {
+        if (parseInt(set.pair1Score, 10) > parseInt(set.pair2Score, 10)) pair1SetWins++;
+        else if (parseInt(set.pair2Score, 10) > parseInt(set.pair1Score, 10)) pair2SetWins++;
+      });
+    }
+
+    if ((pair1SetWins > pair2SetWins && (pair1.player1 === player || pair1.player2 === player)) ||
+      (pair2SetWins > pair1SetWins && (pair2.player1 === player || pair2.player2 === player))) {
+      playerWonCurrentGame = true;
+    }
 
     if (playerWonCurrentGame) {
       consecutiveWins = lastGameWon ? consecutiveWins + 1 : 1;
       lastGameWon = true;
-    } else if (isP1 || isP2) {
-      consecutiveWins = 0;
-      lastGameWon = false;
+    } else {
+      // Solo resetear si el jugador participó y no ganó, o si no participó
+      const playersInGame = [pair1.player1, pair1.player2, pair2.player1, pair2.player2];
+      if (playersInGame.includes(player)) {
+        consecutiveWins = 0;
+        lastGameWon = false;
+      }
     }
+    // maxConsecutiveWins = Math.max(maxConsecutiveWins, consecutiveWins); // Si quisieras la racha más larga histórica
   });
   return consecutiveWins;
 };
+// --- FIN FUNCIONES DE CÁLCULO ---
 
-// --- FUNCIONES DE IMAGEN ---
-const createImage = (url) =>
-  new Promise((resolve, reject) => {
+// --- FUNCIONES DE IMAGEN (sin cambios en su lógica interna) ---
+function createImage(url) {
+  return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error));
+    image.addEventListener('error', error => reject(error));
     image.setAttribute('crossOrigin', 'anonymous');
     image.src = url;
   });
-
-const getCroppedImg = async (imageSrc, pixelCrop) => {
+}
+async function getCroppedImg(imageSrc, cropAreaPixels) {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
-
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    pixelCrop.width,
-    pixelCrop.height
-  );
-
+  if (!ctx || !cropAreaPixels) return null; // Protección adicional
+  const scaleX = image.naturalWidth / image.width;
+  const scaleY = image.naturalHeight / image.height;
+  const { x, y, width, height } = cropAreaPixels;
+  canvas.width = width;
+  canvas.height = height;
+  ctx.drawImage(image, x * scaleX, y * scaleY, width * scaleX, height * scaleY, 0, 0, width, height);
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = () => {
-        resolve(reader.result);
-      };
-    }, 'image/jpeg');
+      if (!blob) { resolve(null); return; } // Protección
+      const fileReader = new FileReader();
+      fileReader.onloadend = () => { resolve(fileReader.result); };
+      fileReader.onerror = () => { resolve(null); }; // Protección
+      fileReader.readAsDataURL(blob);
+    }, 'image/jpeg', 1.0);
   });
-};
+}
+async function scaleImage(dataURL, maxWidth, maxHeight) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width; let height = img.height;
+      if (width > height) { if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; } }
+      else { if (height > maxHeight) { width = Math.round((width * maxHeight) / height); height = maxHeight; } }
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => resolve(null); // Protección
+    img.src = dataURL;
+  });
+}
+// --- FIN FUNCIONES DE IMAGEN ---
 
-// --- COMPONENTE PRINCIPAL ---
+
 const Players = () => {
+  // Usar datos del contexto global
+  const { results: allResults, loading, error } = useData();
+
+  const [playerStats, setPlayerStats] = useState({});
+  const [pairStats, setPairStats] = useState({});
+  const [openComparison, setOpenComparison] = useState(false);
   const navigate = useNavigate();
   const theme = useTheme();
-  const [selectedPlayerKey, setSelectedPlayerKey] = useState(null);
-  
-  const { results, loading, error } = usePadelResults();
 
-  const [playerImages, setPlayerImages] = useState(() => {
-    const stored = localStorage.getItem('playerImages');
+  const initialPlayerImages = useMemo(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('playerImages') : null;
     const parsed = stored ? JSON.parse(stored) : {};
-    Object.keys(playersInfo).forEach(k => { if (!parsed[k]) parsed[k] = playersInfo[k].image; });
+    Object.keys(playersInfo).forEach(key => {
+      if (!parsed[key]) {
+        parsed[key] = playersInfo[key].image;
+      }
+    });
     return parsed;
-  });
-  
+  }, []);
+  const [playerImages, setPlayerImages] = useState(initialPlayerImages);
+
   const [openModal, setOpenModal] = useState(false);
-  const [imgSrc, setImgSrc] = useState(null);
+  const [selectedPlayerForImageChange, setSelectedPlayerForImageChange] = useState(null);
+  const [imageSrc, setImageSrc] = useState(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [statsCalculated, setStatsCalculated] = useState(false);
+
+  const calculateAllStats = useCallback((currentResults) => {
+    if (!currentResults || currentResults.length === 0) {
+      setPlayerStats({}); setPairStats({}); setStatsCalculated(true); return;
+    }
+    const stats = {}; const pStats = {};
+    Object.keys(playersInfo).forEach(pKey => {
+      stats[pKey] = { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
+    });
+    currentResults.forEach(result => {
+      const { pair1, pair2, sets } = result;
+      if (!pair1 || !pair2 || !sets) return;
+      const matchPlayers = [pair1.player1, pair1.player2, pair2.player1, pair2.player2].filter(Boolean);
+      matchPlayers.forEach(player => {
+        if (stats[player]) stats[player].gamesPlayed += 1;
+      });
+      let pair1SetWins = 0; let pair2SetWins = 0;
+      if (Array.isArray(sets)) {
+        sets.forEach(set => {
+          if (parseInt(set.pair1Score, 10) > parseInt(set.pair2Score, 10)) pair1SetWins++;
+          else if (parseInt(set.pair2Score, 10) > parseInt(set.pair1Score, 10)) pair2SetWins++;
+        });
+      }
+      const winnerPairObj = pair1SetWins > pair2SetWins ? pair1 : (pair2SetWins > pair1SetWins ? pair2 : null);
+      const loserPairObj = winnerPairObj === pair1 ? pair2 : (winnerPairObj === pair2 ? pair1 : null);
+      if (winnerPairObj) {
+        [winnerPairObj.player1, winnerPairObj.player2].filter(Boolean).forEach(player => {
+          if (stats[player]) stats[player].gamesWon += 1;
+        });
+      }
+      if (loserPairObj) {
+        [loserPairObj.player1, loserPairObj.player2].filter(Boolean).forEach(player => {
+          if (stats[player]) stats[player].gamesLost += 1;
+        });
+      }
+      if (pair1.player1 && pair1.player2) {
+        const pairKey1 = normalizePairKey(pair1.player1, pair1.player2);
+        if (!pStats[pairKey1]) pStats[pairKey1] = { gamesWon: 0, gamesPlayed: 0 };
+        pStats[pairKey1].gamesPlayed += 1;
+        if (pair1SetWins > pair2SetWins) pStats[pairKey1].gamesWon += 1;
+      }
+      if (pair2.player1 && pair2.player2) {
+        const pairKey2 = normalizePairKey(pair2.player1, pair2.player2);
+        if (!pStats[pairKey2]) pStats[pairKey2] = { gamesWon: 0, gamesPlayed: 0 };
+        pStats[pairKey2].gamesPlayed += 1;
+        if (pair2SetWins > pair1SetWins) pStats[pairKey2].gamesWon += 1;
+      }
+    });
+    Object.keys(stats).forEach(player => {
+      if (stats[player]) {
+        const { gamesWon, gamesPlayed } = stats[player];
+        stats[player].efficiency = gamesPlayed > 0 ? parseFloat(((gamesWon / gamesPlayed) * 100).toFixed(1)) : 0;
+        const playerSpecificResults = currentResults.filter(r =>
+          (r.pair1.player1 === player || r.pair1.player2 === player || r.pair2.player1 === player || r.pair2.player2 === player)
+        );
+        stats[player].consecutiveWins = calculateConsecutiveWins(playerSpecificResults, player);
+      }
+    });
+    Object.keys(pStats).forEach(pairKey => {
+      const { gamesWon, gamesPlayed } = pStats[pairKey];
+      pStats[pairKey].efficiency = gamesPlayed > 0 ? parseFloat(((gamesWon / gamesPlayed) * 100).toFixed(1)) : 0;
+    });
+    setPlayerStats(stats); setPairStats(pStats); setStatsCalculated(true);
+  }, []);
+
+  // Calcular stats cuando los datos esten disponibles
+  useEffect(() => {
+    if (!loading && allResults.length > 0 && !statsCalculated) {
+      calculateAllStats(allResults);
+    } else if (!loading && allResults.length === 0 && !statsCalculated) {
+      setPlayerStats({}); setPairStats({}); setStatsCalculated(true);
+    }
+  }, [allResults, calculateAllStats, loading, statsCalculated]);
 
   useEffect(() => {
     localStorage.setItem('playerImages', JSON.stringify(playerImages));
   }, [playerImages]);
 
-  // --- CÁLCULO DE ESTADÍSTICAS ---
-  const { calculatedStats, calculatedPairStats } = useMemo(() => {
-    if (loading || !results.length) return { calculatedStats: {}, calculatedPairStats: {} };
+  const rankedPlayers = useMemo(() => calculateRanking(
+    Object.keys(playerStats)
+      .filter(key => playersInfo[key] && playerStats[key]) // Asegurar que el jugador y sus stats existen
+      .map(playerKey => ({
+        ...playersInfo[playerKey],
+        ...playerStats[playerKey],
+        image: playerImages[playerKey] || playersInfo[playerKey].image,
+      }))
+  ), [playerStats, playerImages]);
 
-    const pStats = {};
-    const pairStats = {};
+  const rankedPairs = useMemo(() => calculatePairRanking(
+    Object.keys(pairStats)
+      .filter(key => pairStats[key]) // Asegurar que las stats de la pareja existen
+      .map(pairKey => ({
+        players: pairKey.split('-'),
+        ...pairStats[pairKey],
+      }))
+  ), [pairStats]);
 
-    Object.keys(playersInfo).forEach(key => {
-        pStats[key] = { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
-    });
+  const isPlayerTiedWithFirst = (player, firstPlayer) => {
+    if (!firstPlayer || !player || !player.gamesPlayed) return false; // No marcar si no ha jugado
+    return player.gamesWon === firstPlayer.gamesWon && parseFloat(player.efficiency) === parseFloat(firstPlayer.efficiency);
+  };
+  const isPairTiedWithFirst = (pair, firstPair) => {
+    if (!firstPair || !pair || !pair.gamesPlayed) return false; // No marcar si no ha jugado
+    return pair.gamesWon === firstPair.gamesWon && parseFloat(pair.efficiency) === parseFloat(firstPair.efficiency);
+  };
 
-    results.forEach(result => {
-        const { pair1, pair2, sets } = result;
-        if (!sets) return;
-
-        let p1Wins = 0, p2Wins = 0;
-        sets.forEach(s => {
-            if(parseInt(s.pair1Score) > parseInt(s.pair2Score)) p1Wins++;
-            else if(parseInt(s.pair2Score) > parseInt(s.pair1Score)) p2Wins++;
-        });
-
-        const winnerPair = p1Wins > p2Wins ? 1 : (p2Wins > p1Wins ? 2 : 0);
-        if(winnerPair === 0) return;
-
-        const playersP1 = [pair1.player1, pair1.player2].filter(Boolean);
-        const playersP2 = [pair2.player1, pair2.player2].filter(Boolean);
-
-        playersP1.forEach(p => {
-            if(pStats[p]) {
-                pStats[p].gamesPlayed++;
-                if(winnerPair === 1) pStats[p].gamesWon++; else pStats[p].gamesLost++;
-            }
-        });
-        playersP2.forEach(p => {
-            if(pStats[p]) {
-                pStats[p].gamesPlayed++;
-                if(winnerPair === 2) pStats[p].gamesWon++; else pStats[p].gamesLost++;
-            }
-        });
-
-        if (pair1.player1 && pair1.player2) {
-            const k = normalizePairKey(pair1.player1, pair1.player2);
-            if (!pairStats[k]) pairStats[k] = { gamesPlayed: 0, gamesWon: 0 };
-            pairStats[k].gamesPlayed++;
-            if (winnerPair === 1) pairStats[k].gamesWon++;
-        }
-        if (pair2.player1 && pair2.player2) {
-            const k = normalizePairKey(pair2.player1, pair2.player2);
-            if (!pairStats[k]) pairStats[k] = { gamesPlayed: 0, gamesWon: 0 };
-            pairStats[k].gamesPlayed++;
-            if (winnerPair === 2) pairStats[k].gamesWon++;
-        }
-    });
-
-    Object.keys(pStats).forEach(p => {
-        const s = pStats[p];
-        s.efficiency = s.gamesPlayed > 0 ? ((s.gamesWon / s.gamesPlayed) * 100).toFixed(1) : 0;
-        s.consecutiveWins = calculateConsecutiveWins(results, p);
-    });
-
-    Object.keys(pairStats).forEach(k => {
-        const s = pairStats[k];
-        s.efficiency = s.gamesPlayed > 0 ? ((s.gamesWon / s.gamesPlayed) * 100).toFixed(1) : 0;
-    });
-
-    return { calculatedStats: pStats, calculatedPairStats: pairStats };
-  }, [results, loading]);
-
-  const rankedPlayers = useMemo(() => {
-    return Object.keys(calculatedStats)
-        .map(key => ({ ...playersInfo[key], ...calculatedStats[key], id: key }))
-        .sort((a, b) => {
-            const effDiff = parseFloat(b.efficiency) - parseFloat(a.efficiency);
-            if (effDiff !== 0) return effDiff;
-            return b.gamesWon - a.gamesWon;
-        });
-  }, [calculatedStats]);
-
-  const rankedPairs = useMemo(() => {
-    return Object.keys(calculatedPairStats)
-        .map(key => ({ names: key, ...calculatedPairStats[key] }))
-        .filter(p => p.gamesPlayed > 0)
-        .sort((a, b) => parseFloat(b.efficiency) - parseFloat(a.efficiency) || b.gamesWon - a.gamesWon);
-  }, [calculatedPairStats]);
-
-
-  // --- MANEJADORES DE IMAGEN ---
-  const onFileChange = async (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      const imageDataUrl = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.addEventListener('load', () => resolve(reader.result));
-          reader.readAsDataURL(file);
-      });
-      setImgSrc(imageDataUrl);
+  const handleImageEditClick = (playerKey) => {
+    setSelectedPlayerForImageChange(playerKey);
+    setImageSrc(playerImages[playerKey] || playersInfo[playerKey].image);
+    setOpenModal(true);
+  };
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => { setImageSrc(reader.result); };
+    reader.readAsDataURL(file);
+  };
+  const onCropComplete = useCallback((croppedArea, croppedAreaPixelsValue) => {
+    setCroppedAreaPixels(croppedAreaPixelsValue);
+  }, []);
+  const handleConfirmImage = async () => {
+    if (imageSrc && selectedPlayerForImageChange && croppedAreaPixels) {
+      const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
+      if (croppedImage) {
+        const scaledImage = await scaleImage(croppedImage, 250, 250);
+        if (scaledImage) {
+          setPlayerImages(prev => ({ ...prev, [selectedPlayerForImageChange]: scaledImage }));
+        } else { console.error("Error al escalar imagen"); }
+      } else { console.error("Error al recortar imagen"); }
+    }
+    closeModal();
+  };
+  const handleCancelImage = () => closeModal();
+  const handleRestoreDefault = () => {
+    if (selectedPlayerForImageChange) {
+      const defaultImage = playersInfo[selectedPlayerForImageChange].image;
+      setPlayerImages(prev => ({ ...prev, [selectedPlayerForImageChange]: defaultImage }));
     }
   };
-  
-  const showCropper = (playerKey, e) => {
-      e.stopPropagation();
-      setEditingPlayer(playerKey);
-      setImgSrc(null);
-      setOpenModal(true);
+  const closeModal = () => {
+    setOpenModal(false); setImageSrc(null); setSelectedPlayerForImageChange(null);
+    setCroppedAreaPixels(null); setZoom(1); setCrop({ x: 0, y: 0 });
   };
 
-  const closeCropper = () => {
-      setOpenModal(false);
-      setImgSrc(null);
-      setEditingPlayer(null);
-  };
-
-  const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
-    setCroppedAreaPixels(croppedAreaPixels);
-  }, []);
-
-  const saveCroppedImage = async () => {
-      try {
-          const croppedImage = await getCroppedImg(imgSrc, croppedAreaPixels);
-          setPlayerImages(prev => ({ ...prev, [editingPlayer]: croppedImage }));
-          closeCropper();
-      } catch (e) {
-          console.error(e);
-      }
-  };
-
-  const headerStyle = {
-    background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-    color: theme.palette.common.white,
-    padding: theme.spacing(3),
-    borderRadius: 3,
-    marginBottom: theme.spacing(4),
-    textAlign: 'center',
-    boxShadow: '0px 8px 20px rgba(0,0,0,0.15)',
-    position: 'relative'
-  };
-
-  if (error) return <Container sx={{ py: 4 }}><Alert severity="error">{error}</Alert></Container>;
+  if (loading || !statsCalculated) {
+    return (
+      <Container sx={{ py: 3 }}>
+        <Box
+          sx={{
+            mb: 4,
+            textAlign: 'center',
+            position: 'relative',
+            py: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontFamily: tokens.typography.displayFont,
+              letterSpacing: '0.1em',
+              color: theme.palette.secondary.main,
+              position: 'relative',
+              display: 'inline-block',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '60%',
+                height: '3px',
+                background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+              },
+            }}
+          >
+            Fichas de Jugadores
+          </Typography>
+        </Box>
+        <Grid container spacing={3}>
+          {[1, 2, 3, 4].map((index) => (
+            <Grid item xs={12} sm={6} md={3} key={index}>
+              <PlayerCardSkeleton />
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+    );
+  }
+  if (error) {
+    return <Container sx={{ py: 4, textAlign: 'center' }}><Alert severity="error">{error}</Alert></Container>;
+  }
 
   return (
-    <Container sx={{ py: 3, pb: 8 }}>
-        {/* HEADER */}
-        <Paper elevation={0} sx={headerStyle}>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
-                Fichas de Jugadores
-            </Typography>
-            <Typography variant="subtitle2" sx={{ opacity: 0.9, mt: 0.5 }}>
-                Perfiles y Rankings
-            </Typography>
-        </Paper>
-
-        {/* CARDS DE JUGADORES */}
-        {loading ? (
-            <Grid container spacing={3}>
-                {[1,2,3,4].map(i => (
-                    <Grid item xs={12} sm={6} md={3} key={i}>
-                        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
-                    </Grid>
-                ))}
-            </Grid>
-        ) : (
-            <Grid container spacing={3} sx={{ mb: 6 }}>
-                {Object.keys(playersInfo).map(key => {
-                    const info = playersInfo[key];
-                    const stats = calculatedStats[key] || {};
-                    const isSelected = selectedPlayerKey === key;
-                    
-                    return (
-                        <Grid item xs={12} sm={6} md={3} key={key}>
-                            <Card 
-                                onClick={() => setSelectedPlayerKey(isSelected ? null : key)}
-                                elevation={isSelected ? 8 : 2}
-                                sx={{ 
-                                    height: '100%', borderRadius: 3, position: 'relative',
-                                    transition: 'all 0.3s ease', cursor: 'pointer',
-                                    transform: isSelected ? 'translateY(-8px)' : 'none',
-                                    border: isSelected ? `2px solid ${theme.palette.primary.main}` : 'none'
-                                }}
-                            >
-                                <Box sx={{ position: 'relative', pt: '100%' }}>
-                                    <CardMedia 
-                                        image={playerImages[key] || info.image} 
-                                        sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                                    />
-                                    <IconButton 
-                                        size="small" 
-                                        onClick={(e) => showCropper(key, e)}
-                                        sx={{ position: 'absolute', bottom: 8, right: 8, bgcolor: 'rgba(0,0,0,0.6)', color: 'white', '&:hover':{bgcolor:'black'} }}
-                                    >
-                                        <PhotoCameraIcon fontSize="small"/>
-                                    </IconButton>
-                                </Box>
-                                <CardContent sx={{ textAlign: 'center' }}>
-                                    <Box display="flex" alignItems="center" justifyContent="center" gap={1} mb={0.5}>
-                                        <Typography variant="h6" fontWeight="bold">{info.name}</Typography>
-                                        <img src={info.flag} alt="flag" style={{ width: 20, borderRadius: 2 }} />
-                                    </Box>
-                                    <Typography variant="body2" color="text.secondary" mb={1}>{info.position}</Typography>
-                                    
-                                    {isSelected ? (
-                                        <Fade in={true}>
-                                            <Box sx={{ mt: 2, textAlign: 'left', bgcolor: theme.palette.action.hover, p: 1.5, borderRadius: 2 }}>
-                                                <Typography variant="caption" display="block">🎂 {info.birthDate}</Typography>
-                                                <Typography variant="caption" display="block">📏 {info.height}</Typography>
-                                                <Typography variant="caption" display="block">📍 {info.birthPlace}</Typography>
-                                                <Divider sx={{ my: 1 }} />
-                                                <Box display="flex" justifyContent="space-between">
-                                                    <Typography variant="caption" fontWeight="bold">Efic.:</Typography>
-                                                    <Typography variant="caption" fontWeight="bold" color="primary">{stats.efficiency}%</Typography>
-                                                </Box>
-                                                <Box display="flex" justifyContent="space-between">
-                                                    <Typography variant="caption">G / P:</Typography>
-                                                    <Typography variant="caption">{stats.gamesWon} / {stats.gamesLost}</Typography>
-                                                </Box>
-                                            </Box>
-                                        </Fade>
-                                    ) : (
-                                        <ArrowDropDownIcon color="action" />
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </Grid>
-                    );
-                })}
-            </Grid>
-        )}
-
-        {/* RANKINGS */}
-        {!loading && (
-            <Grid container spacing={4}>
-                {/* Ranking Individual */}
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 3, height: '100%' }} elevation={3}>
-                        <Typography variant="h6" fontWeight="bold" mb={2} display="flex" alignItems="center">
-                            <EmojiEventsIcon sx={{ color: '#FFD700', mr: 1 }} /> Ranking Individual
-                        </Typography>
-                        {rankedPlayers.map((p, idx) => (
-                            <Box key={p.id} sx={{ display: 'flex', alignItems: 'center', mb: 1.5, p: 1, borderRadius: 2, bgcolor: idx === 0 ? 'rgba(255, 215, 0, 0.1)' : 'transparent' }}>
-                                <Typography fontWeight="bold" sx={{ width: 24, color: 'text.secondary' }}>{idx + 1}</Typography>
-                                <Avatar src={playerImages[p.id] || p.image} sx={{ width: 32, height: 32, mr: 1.5 }} />
-                                <Box flexGrow={1}>
-                                    <Typography variant="body2" fontWeight="bold">{p.name}</Typography>
-                                </Box>
-                                <Box textAlign="right">
-                                    <Typography variant="body2" fontWeight="bold" color="primary">{p.efficiency}%</Typography>
-                                    <Typography variant="caption" color="text.secondary">{p.gamesWon}W - {p.gamesLost}L</Typography>
-                                </Box>
-                            </Box>
-                        ))}
-                    </Paper>
-                </Grid>
-
-                {/* Ranking Parejas */}
-                <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 2, borderRadius: 3, height: '100%' }} elevation={3}>
-                        <Typography variant="h6" fontWeight="bold" mb={2} display="flex" alignItems="center">
-                            <SportsTennisIcon sx={{ color: theme.palette.secondary.main, mr: 1 }} /> Ranking Parejas
-                        </Typography>
-                        {rankedPairs.length > 0 ? rankedPairs.slice(0, 5).map((p, idx) => (
-                            <Box key={idx} sx={{ display: 'flex', alignItems: 'center', mb: 1.5, p: 1, borderBottom: '1px solid #eee' }}>
-                                <Typography fontWeight="bold" sx={{ width: 24, color: 'text.secondary' }}>{idx + 1}</Typography>
-                                <Box flexGrow={1}>
-                                    <Typography variant="body2" fontWeight="bold">{p.names}</Typography>
-                                </Box>
-                                <Box textAlign="right">
-                                    <Typography variant="body2" fontWeight="bold" color="secondary">{p.efficiency}%</Typography>
-                                    {/* CAMBIO AQUÍ: MOSTRAR G / J */}
-                                    <Typography variant="caption" color="text.secondary">
-                                        {p.gamesWon} G / {p.gamesPlayed} J
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        )) : <Typography variant="body2" color="text.secondary">No hay datos suficientes.</Typography>}
-                    </Paper>
-                </Grid>
-            </Grid>
-        )}
-
-        {/* MODAL CROPPER */}
-        <Modal open={openModal} onClose={closeCropper}>
-            <Box sx={{ 
-                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                width: { xs: '90%', sm: 400 }, bgcolor: 'background.paper', boxShadow: 24, p: 3, borderRadius: 3 
-            }}>
-                <Typography variant="h6" mb={2}>Editar Foto de {editingPlayer}</Typography>
-                
-                {!imgSrc ? (
-                    <Button variant="contained" component="label" fullWidth>
-                        Subir Imagen
-                        <input type="file" hidden accept="image/*" onChange={onFileChange} />
-                    </Button>
-                ) : (
-                    <>
-                        <Box sx={{ position: 'relative', height: 250, width: '100%', mb: 2, bgcolor: '#333' }}>
-                            <Cropper image={imgSrc} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} />
-                        </Box>
-                        <Box display="flex" alignItems="center" gap={2} mb={2}>
-                            <Typography variant="caption">Zoom</Typography>
-                            <Slider value={zoom} min={1} max={3} step={0.1} onChange={(e, v) => setZoom(v)} />
-                        </Box>
-                        <Box display="flex" justifyContent="flex-end" gap={1}>
-                            <Button onClick={closeCropper} color="inherit">Cancelar</Button>
-                            <Button onClick={saveCroppedImage} variant="contained">Guardar</Button>
-                        </Box>
-                    </>
-                )}
+    <Container sx={{ py: 3 }}>
+      <Modal open={openModal} onClose={handleCancelImage} closeAfterTransition BackdropComponent={Backdrop} BackdropProps={{ timeout: 500 }}>
+        <Fade in={openModal}>
+          <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', bgcolor: 'background.paper', borderRadius: 2, boxShadow: 24, p: { xs: 2, sm: 3 }, textAlign: 'center', width: { xs: '90%', sm: 450 }, display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" gutterBottom sx={{ color: theme.palette.common.black, fontWeight: 'bold' }}>Editar Imagen de Perfil</Typography>
+            <Box component="label" htmlFor="upload-image-file" sx={{ cursor: 'pointer', my: 1 }}>
+              <Button variant="outlined" component="span" size="small" sx={{ color: theme.palette.common.black, borderColor: theme.palette.common.black }}>
+                Cargar Nueva Imagen
+              </Button>
+              <input id="upload-image-file" type="file" accept="image/*" onChange={handleFileChange} hidden />
             </Box>
-        </Modal>
+            <Box sx={{ position: 'relative', width: '100%', height: { xs: 200, sm: 300 }, mt: 1, mb: 1, bgcolor: theme.palette.grey[200], borderRadius: 1 }}>
+              {imageSrc && (<Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} />)}
+              {!imageSrc && <Typography sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'text.secondary' }}>Vista previa</Typography>}
+            </Box>
+            {imageSrc && (
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', my: 1.5 }}>
+                <Typography variant="body2" sx={{ color: theme.palette.common.black }}>Zoom:</Typography>
+                <Slider value={zoom} min={1} max={3} step={0.1} onChange={(e, newValue) => setZoom(newValue)} sx={{ flexGrow: 1, mx: 2, color: theme.palette.common.black }} size="small" />
+              </Box>
+            )}
+            <Grid container spacing={1} justifyContent="center" sx={{ mt: 1 }}>
+              <Grid item xs={6} sm="auto"> <Button fullWidth variant="outlined" onClick={handleRestoreDefault} size="small" sx={{ color: theme.palette.common.black, borderColor: theme.palette.common.black }}>Restaurar</Button></Grid>
+              <Grid item xs={6} sm="auto"> <Button fullWidth variant="text" onClick={handleCancelImage} size="small" sx={{ color: theme.palette.grey[700] }}>Cancelar</Button></Grid>
+              <Grid item xs={12} sm="auto"> <Button fullWidth variant="contained" sx={{ backgroundColor: theme.palette.common.black, color: theme.palette.common.white, '&:hover': { backgroundColor: theme.palette.grey[800] } }} onClick={handleConfirmImage} disabled={!imageSrc || !croppedAreaPixels} size="small">Aplicar</Button></Grid>
+            </Grid>
+          </Box>
+        </Fade>
+      </Modal>
 
+      <Box
+        sx={{
+          mb: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.1em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Fichas de Jugadores
+        </Typography>
+      </Box>
+
+      {/* Botón flotante para comparar jugadores */}
+      <Fab
+        color="primary"
+        aria-label="comparar jugadores"
+        onClick={() => setOpenComparison(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 100,
+          right: 24,
+          zIndex: 1000,
+          backgroundColor: theme.palette.common.black,
+          color: theme.palette.common.white,
+          boxShadow: theme.shadows[6],
+          '&:hover': {
+            backgroundColor: theme.palette.grey[800],
+            boxShadow: theme.shadows[8],
+          },
+        }}
+      >
+        <CompareArrowsIcon />
+      </Fab>
+
+      {/* Modal de comparación */}
+      <PlayerComparison
+        open={openComparison}
+        onClose={() => setOpenComparison(false)}
+        playersInfo={playersInfo}
+        playerStats={playerStats}
+        playerImages={playerImages}
+        allResults={allResults}
+      />
+
+      <Grid container spacing={3}>
+        {Object.keys(playersInfo).map((playerKey, index) => {
+          const player = playersInfo[playerKey];
+          const stats = playerStats[playerKey] || { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
+          const rank = rankedPlayers.findIndex(p => p.name === player.name) + 1;
+
+          return (
+            <Grid item xs={12} sm={6} md={3} key={playerKey}>
+              <PlayerCard
+                player={player}
+                playerKey={playerKey}
+                stats={stats}
+                image={playerImages[playerKey] || player.image}
+                rank={rank}
+                onImageEdit={handleImageEditClick}
+                allResults={allResults}
+              />
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      <Box
+        sx={{
+          my: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h5"
+          component="h2"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.08em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Ranking Individual
+        </Typography>
+      </Box>
+      {rankedPlayers.length === 0 ? (
+        <Typography sx={{ textAlign: 'center', width: '100%', color: 'text.secondary', mb: 3 }}>No hay suficientes datos para el ranking.</Typography>
+      ) : (
+        <Grid container spacing={1.5}> {/* Reducir spacing para ranking */}
+          {rankedPlayers.map((player, index) => {
+            const isFirst = index === 0;
+            const tiedWithFirstCurrent = isPlayerTiedWithFirst(player, rankedPlayers[0]);
+            return (
+              <Grid item xs={12} key={`${player.name}-rank-${index}`}>
+                <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderRadius: 2, backgroundColor: (isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 ? theme.palette.success.light + '30' : theme.palette.background.paper, borderLeft: (isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 ? `5px solid ${theme.palette.success.main}` : `5px solid transparent` }}>
+                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.text.primary, mr: 1.5 }}>
+                    {index + 1}°
+                  </Typography>
+                  <CardMedia component="img" sx={{ width: 45, height: 45, borderRadius: '50%', mr: 1.5, border: `2px solid ${theme.palette.success.main}` }} image={player.image} alt={player.name} />
+                  <Box flexGrow={1}>
+                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
+                      {player.name} {(isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 && <EmojiEventsIcon sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', ml: 0.5, fontSize: '1.2rem' }} />}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{playersInfo[player.name]?.country}</Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.success.main }}>{player.efficiency}%</Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{player.gamesWon} G / {player.gamesPlayed} J</Typography>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
+
+      <Box
+        sx={{
+          my: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h5"
+          component="h2"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.08em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Ranking por Parejas
+        </Typography>
+      </Box>
+      {rankedPairs.length === 0 ? (
+        <Typography sx={{ textAlign: 'center', width: '100%', color: 'text.secondary', mb: 3 }}>No hay suficientes datos para el ranking de parejas.</Typography>
+      ) : (
+        <Grid container spacing={1.5}>
+          {rankedPairs.map((pair, index) => {
+            const isFirst = index === 0;
+            const tiedWithFirstCurrent = isPairTiedWithFirst(pair, rankedPairs[0]);
+            return (
+              <Grid item xs={12} key={`pair-rank-${index}`}>
+                <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderRadius: 2, backgroundColor: (isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 ? theme.palette.success.light + '30' : theme.palette.background.paper, borderLeft: (isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 ? `5px solid ${theme.palette.success.main}` : `5px solid transparent` }}>
+                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.text.primary, mr: 1.5 }}>
+                    {index + 1}°
+                  </Typography>
+                  <Box flexGrow={1}>
+                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
+                      {pair.players[0]} & {pair.players[1]} {(isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 && <EmojiEventsIcon sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', ml: 0.5, fontSize: '1.2rem' }} />}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.success.main }}>{pair.efficiency}%</Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{pair.gamesWon} G / {pair.gamesPlayed} J</Typography>
+                  </Box>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+      )}
     </Container>
   );
 };
