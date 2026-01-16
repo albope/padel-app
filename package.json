@@ -12,21 +12,26 @@
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
-    "chart.js": "^4.4.7",
+    "canvas-confetti": "^1.9.4",
+    "chart.js": "^4.5.1",
     "dayjs": "^1.11.13",
     "file-saver": "^2.0.5",
     "firebase": "^10.13.1",
+    "framer-motion": "^12.26.2",
     "html2canvas": "^1.4.1",
     "react": "^18.3.1",
     "react-bootstrap": "^2.10.4",
-    "react-chartjs-2": "^5.2.0",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.3.1",
     "react-easy-crop": "^5.2.0",
     "react-is": "^18.3.1",
     "react-router-dom": "^6.26.1",
     "react-scripts": "5.0.1",
+    "react-spring": "^10.0.3",
     "recharts": "^2.12.7",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "workbox-webpack-plugin": "^7.4.0",
+    "workbox-window": "^7.4.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -51,5 +56,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
   }
 }

@@ -1,4 +1,4 @@
-// Este archivo se encarga de registrar el Service Worker
+// Este archivo se encarga de registrar el Service Worker con Workbox
 
 const isLocalhost = Boolean(
   window.location.hostname === 'localhost' ||
@@ -11,30 +11,33 @@ const isLocalhost = Boolean(
 );
 
 export function register(config) {
-  if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-    const publicUrl = new URL(process.env.PUBLIC_URL, window.location.href);
-    if (publicUrl.origin !== window.location.origin) {
-      return;
-    }
-
-    window.addEventListener('load', () => {
-      const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
-
-      if (isLocalhost) {
-        // Esto es para localhost: comprueba si hay un service worker que sirva los archivos.
-        checkValidServiceWorker(swUrl, config);
-
-        // Agrega más detalles en localhost para usar el service worker
-        navigator.serviceWorker.ready.then(() => {
-          console.log(
-            'Esta aplicación web está usando un Service Worker local.'
-          );
-        });
-      } else {
-        // No es localhost. Registra el service worker en producción.
-        registerValidSW(swUrl, config);
+  if ('serviceWorker' in navigator) {
+    // Solo registra en producción por defecto, pero permite desarrollo con flag
+    if (process.env.NODE_ENV === 'production' || process.env.REACT_APP_SW_DEV === 'true') {
+      const publicUrl = new URL(process.env.PUBLIC_URL, window.location.href);
+      if (publicUrl.origin !== window.location.origin) {
+        return;
       }
-    });
+
+      window.addEventListener('load', () => {
+        const swUrl = `${process.env.PUBLIC_URL}/service-worker.js`;
+
+        if (isLocalhost) {
+          // Esto es para localhost: comprueba si hay un service worker que sirva los archivos.
+          checkValidServiceWorker(swUrl, config);
+
+          // Agrega más detalles en localhost para usar el service worker
+          navigator.serviceWorker.ready.then(() => {
+            console.log(
+              '[PWA] Esta aplicación web está usando un Service Worker local.'
+            );
+          });
+        } else {
+          // No es localhost. Registra el service worker en producción.
+          registerValidSW(swUrl, config);
+        }
+      });
+    }
   }
 }
 
@@ -52,15 +55,21 @@ function registerValidSW(swUrl, config) {
             if (navigator.serviceWorker.controller) {
               // Nueva actualización está lista
               console.log(
-                'Nueva actualización disponible. Por favor, recarga la página.'
+                '[PWA] Nueva actualización disponible. Por favor, recarga la página.'
               );
 
+              // Mostrar notificación al usuario de que hay una actualización
               if (config && config.onUpdate) {
                 config.onUpdate(registration);
+              } else {
+                // Notificación por defecto
+                if (window.confirm('Hay una nueva versión disponible. ¿Recargar la página?')) {
+                  window.location.reload();
+                }
               }
             } else {
               // Contenido está cacheado para uso offline.
-              console.log('Contenido cacheado para uso offline.');
+              console.log('[PWA] Contenido cacheado para uso offline.');
 
               if (config && config.onSuccess) {
                 config.onSuccess(registration);
@@ -69,9 +78,14 @@ function registerValidSW(swUrl, config) {
           }
         };
       };
+
+      // Verificar actualizaciones cada hora
+      setInterval(() => {
+        registration.update();
+      }, 60 * 60 * 1000);
     })
     .catch((error) => {
-      console.error('Error durante la instalación del Service Worker:', error);
+      console.error('[PWA] Error durante la instalación del Service Worker:', error);
     });
 }
 

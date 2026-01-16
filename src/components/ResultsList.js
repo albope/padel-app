@@ -1,26 +1,38 @@
 // ResultsList.js
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 // No necesitamos getDocs, collection de firebase aquí si los datos vienen de props
 import { deleteDoc, doc, addDoc, updateDoc, serverTimestamp, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 
 import {
-    Typography, Grid, Card, CardContent, CardActions, Box, Button,
-    FormControl, Select, MenuItem, InputLabel, IconButton, Table, TableBody,
-    TableCell, TableContainer, TableHead, TableRow, Paper, TextField,
-    CircularProgress, useTheme, Chip, Tooltip
+    Typography, Grid, Card, CardContent, Box, Button,
+    FormControl, Select, MenuItem, InputLabel, Paper, TextField,
+    CircularProgress, useTheme
 } from '@mui/material';
-import { EmojiEvents, Star, Edit, ContentCopy } from '@mui/icons-material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ShareIcon from '@mui/icons-material/Share';
+import { alpha } from '@mui/material/styles';
+import { Star } from '@mui/icons-material'; // Used in categorizeMatch
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import HistoryIcon from '@mui/icons-material/History';
+import { tokens } from '../theme';
 
 import dayjs from 'dayjs';
+
+// Context hooks
+import { useSnackbar } from '../context/SnackbarContext';
+import { useConfirmDialog } from '../context/ConfirmDialog';
+import { useData } from '../context/DataContext';
+
+// Components
+import MatchCard from './MatchCard';
+import ResultsListSkeleton from './skeletons/ResultsListSkeleton';
 
 // Props que esperamos: results (array de todos los resultados)
 const ResultsList = ({ results: allResults }) => {
     const theme = useTheme();
+    const { showSuccess, showError } = useSnackbar();
+    const { confirmDelete } = useConfirmDialog();
+    const { refreshResults } = useData();
 
     // Estados para el filtrado y paginación
     const [filteredResults, setFilteredResults] = useState([]);
@@ -33,6 +45,35 @@ const ResultsList = ({ results: allResults }) => {
     // Estados para la edición en línea
     const [editingId, setEditingId] = useState(null);
     const [editableResult, setEditableResult] = useState(null);
+
+    // Track newly added results for animation
+    const [newResultId, setNewResultId] = useState(null);
+    const prevResultsCount = useRef(allResults?.length || 0);
+
+    // Detect new results for animation
+    useEffect(() => {
+        let timeoutId = null;
+
+        if (allResults && allResults.length > prevResultsCount.current) {
+            // A new result was added - get the most recent one
+            const sortedResults = [...allResults].sort((a, b) => {
+                const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                return dateB - dateA;
+            });
+            if (sortedResults[0]) {
+                setNewResultId(sortedResults[0].id);
+                // Clear the new flag after animation
+                timeoutId = setTimeout(() => setNewResultId(null), 500);
+            }
+        }
+        prevResultsCount.current = allResults?.length || 0;
+
+        // Cleanup to prevent memory leak if component unmounts
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [allResults]);
     
     // --- LÓGICA DE FILTRADO Y DATOS DERIVADOS ---
     useEffect(() => {
@@ -118,7 +159,7 @@ const categorizeMatch = useCallback((pair1, pair2) => {
         }
 
         return null; // No es un Superclásico, no se aplica ninguna otra etiqueta
-    }, [theme]); // allResults ya no es necesario como dependencia si no contamos enfrentamientos previos
+    }, []); // No dependencies needed - uses static values only
 
     const handleMonthChange = useCallback(event => {
         setCurrentMonth(event.target.value);
@@ -129,46 +170,50 @@ const categorizeMatch = useCallback((pair1, pair2) => {
     }, []);
 
     const handleDeleteResult = useCallback(async (resultId, resultData) => {
-        if (!window.confirm("¿Estás seguro de que quieres eliminar este resultado?")) return;
+        const confirmed = await confirmDelete(
+            '¿Estás seguro de que quieres eliminar este resultado? Esta accion no se puede deshacer.'
+        );
+        if (!confirmed) return;
+
         try {
             await deleteDoc(doc(db, 'results', resultId));
-            await addDoc(collection(db, 'deletions'), { 
+            await addDoc(collection(db, 'deletions'), {
                 resultId,
                 dateDeleted: serverTimestamp(),
                 deletedBy: localStorage.getItem('addedBy') || 'Anónimo',
-                resultData, 
+                resultData,
             });
-            alert("Resultado eliminado. La lista se actualizará."); 
-            // Idealmente, HomePage que es dueño de 'allResults' debería refrescar.
-            // O si ResultsList es independiente (no recomendado ahora), haría su propio fetchResults().
+            await refreshResults();
+            showSuccess('Resultado eliminado correctamente');
         } catch (error) {
             console.error('Error al eliminar el resultado:', error);
-            alert("Error al eliminar el resultado.");
+            showError('Error al eliminar el resultado. Intentalo de nuevo.');
         }
-    }, []);
+    }, [confirmDelete, showSuccess, showError, refreshResults]);
 
     const handleClone = useCallback(async (resultToClone) => {
         try {
             const newResult = { ...resultToClone };
-            delete newResult.id; 
-            newResult.date = serverTimestamp(); 
+            delete newResult.id;
+            newResult.date = serverTimestamp();
             newResult.createdAt = serverTimestamp();
             newResult.addedBy = localStorage.getItem('addedBy') || 'Clonador Anónimo';
 
             await addDoc(collection(db, "results"), newResult);
-            alert("Resultado clonado y añadido con la fecha actual. La lista se actualizará.");
+            await refreshResults();
+            showSuccess('Resultado clonado con la fecha actual');
         } catch (error) {
             console.error("Error al clonar el resultado:", error);
-            alert("Error al clonar el resultado.");
+            showError('Error al clonar el resultado. Intentalo de nuevo.');
         }
-    }, []);
+    }, [showSuccess, showError, refreshResults]);
 
     const handleEdit = useCallback((result) => {
         setEditingId(result.id);
         const dateObj = result.date?.toDate ? result.date.toDate() : new Date(result.date);
-        setEditableResult({ 
-            ...result, 
-            date: dayjs(dateObj).format('YYYY-MM-DD') 
+        setEditableResult({
+            ...result,
+            date: dayjs(dateObj).format('YYYY-MM-DD')
         });
     }, []);
 
@@ -177,39 +222,38 @@ const categorizeMatch = useCallback((pair1, pair2) => {
         try {
             const dataToUpdate = {
                 ...editableResult,
-                date: dayjs(editableResult.date).toDate(), 
+                date: dayjs(editableResult.date).toDate(),
             };
-            delete dataToUpdate.id; 
+            delete dataToUpdate.id;
 
             await updateDoc(doc(db, "results", editingId), dataToUpdate);
             setEditingId(null);
             setEditableResult(null);
-            alert("Resultado actualizado. La lista se actualizará.");
+            await refreshResults();
+            showSuccess('Resultado actualizado correctamente');
         } catch (error) {
             console.error("Error al guardar los cambios:", error);
-            alert("Error al guardar los cambios.");
+            showError('Error al guardar los cambios. Intentalo de nuevo.');
         }
-    }, [editableResult, editingId]);
+    }, [editableResult, editingId, showSuccess, showError, refreshResults]);
 
     const handleCancelEdit = useCallback(() => {
         setEditingId(null);
         setEditableResult(null);
     }, []);
 
-    const isWinner = useCallback((pair, sets) => {
-        if (!sets || !Array.isArray(sets)) return false;
+    // Determine winner for share message
+    const getWinnerPair = useCallback((result) => {
+        if (!result.sets || !Array.isArray(result.sets)) return null;
         let pair1Wins = 0;
         let pair2Wins = 0;
-        sets.forEach(set => {
+        result.sets.forEach(set => {
             const p1Score = parseInt(set.pair1Score, 10);
             const p2Score = parseInt(set.pair2Score, 10);
-            if (p1Score > p2Score) {
-                pair1Wins++;
-            } else if (p2Score > p1Score) {
-                pair2Wins++;
-            }
+            if (p1Score > p2Score) pair1Wins++;
+            else if (p2Score > p1Score) pair2Wins++;
         });
-        return pair === 'pair1' ? pair1Wins > pair2Wins : pair2Wins > pair1Wins;
+        return pair1Wins > pair2Wins ? 'pair1' : pair2Wins > pair1Wins ? 'pair2' : null;
     }, []);
 
     const handleShareResult = useCallback(result => {
@@ -217,10 +261,11 @@ const categorizeMatch = useCallback((pair1, pair2) => {
             .map((set, index) => `  - *Set ${index + 1}:* ${set.pair1Score}-${set.pair2Score}`)
             .join('\n');
 
-        const winnerText = isWinner('pair1', result.sets)
+        const winner = getWinnerPair(result);
+        const winnerText = winner === 'pair1'
             ? `*¡Victoria de ${result.pair1?.player1 || 'N/A'} y ${result.pair1?.player2 || 'N/A'}!*`
             : `*¡Victoria de ${result.pair2?.player1 || 'N/A'} y ${result.pair2?.player2 || 'N/A'}!*`;
-        
+
         const dateObj = result.date?.toDate ? result.date.toDate() : new Date(result.date);
 
         const message = `
@@ -239,7 +284,7 @@ ${winnerText}`;
 
         const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
-    }, [isWinner]);
+    }, [getWinnerPair]);
 
     const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
     const paginatedResults = useMemo(() => {
@@ -259,59 +304,178 @@ ${winnerText}`;
         }
     }, [currentPage]);
 
-    if (!allResults) { 
-        return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 3 }}>
-                <CircularProgress />
-                <Typography sx={{ ml: 2 }}>Cargando resultados...</Typography>
-            </Box>
-        );
+    if (!allResults) {
+        return <ResultsListSkeleton itemCount={5} />;
     }
     
 
     return (
         <Box sx={{ width: '100%' }}>
-            <Paper elevation={2} sx={{ p: {xs: 1.5, sm:2.5}, mb: 3, borderRadius: 3 }}>
-                <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold', textAlign: 'center', color: theme.palette.primary.main }}>
-                    Historial de Partidas
-                </Typography>
-                <Grid container spacing={2} alignItems="flex-end">
-                    <Grid item xs={12} sm={6} md={5}>
-                        <FormControl fullWidth variant="outlined">
-                            <InputLabel id="month-select-label">Mes</InputLabel>
-                            <Select
-                                labelId="month-select-label"
-                                value={currentMonth}
-                                onChange={handleMonthChange}
-                                label="Mes"
-                            >
-                                {[
-                                    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                                    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-                                ].map((month, index) => (
-                                    <MenuItem key={index} value={index}>{month}</MenuItem>
-                                ))}
-                                <MenuItem value={12}>Año completo</MenuItem>
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={5}>
-                        <FormControl fullWidth variant="outlined">
-                            <InputLabel id="year-select-label">Año</InputLabel>
-                            <Select
-                                labelId="year-select-label"
-                                value={currentYear}
-                                onChange={handleYearChange}
-                                label="Año"
-                                disabled={availableYears.length === 0}
-                            >
-                                {availableYears.map(year => (
-                                    <MenuItem key={year} value={year}>{year}</MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                </Grid>
+            {/* Premium Header - Historial de Partidas */}
+            <Paper
+                elevation={4}
+                sx={{
+                    mb: 3,
+                    borderRadius: 3,
+                    background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.95)} 0%, ${alpha(theme.palette.primary.dark, 0.98)} 100%)`,
+                    border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}
+            >
+                {/* Línea decorativa superior */}
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 3,
+                        background: `linear-gradient(90deg, ${theme.palette.secondary.main} 0%, ${tokens.colors.electricLime.main} 50%, ${theme.palette.secondary.main} 100%)`,
+                    }}
+                />
+
+                {/* Título con icono */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1.5,
+                        pt: 2.5,
+                        pb: 1.5,
+                    }}
+                >
+                    <HistoryIcon
+                        sx={{
+                            fontSize: { xs: 22, sm: 26 },
+                            color: theme.palette.secondary.main,
+                            filter: `drop-shadow(0 0 6px ${alpha(theme.palette.secondary.main, 0.5)})`,
+                        }}
+                    />
+                    <Typography
+                        sx={{
+                            fontFamily: tokens.typography.displayFont,
+                            fontSize: { xs: '1.1rem', sm: '1.4rem' },
+                            letterSpacing: '0.08em',
+                            color: theme.palette.secondary.main,
+                            textShadow: `0 0 15px ${alpha(theme.palette.secondary.main, 0.3)}`,
+                        }}
+                    >
+                        HISTORIAL DE PARTIDAS
+                    </Typography>
+                </Box>
+
+                {/* Selectores compactos inline */}
+                <Box
+                    sx={{
+                        display: 'flex',
+                        gap: { xs: 1.5, sm: 2 },
+                        px: { xs: 2, sm: 3 },
+                        pb: 2.5,
+                        justifyContent: 'center',
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <FormControl
+                        size="small"
+                        sx={{
+                            minWidth: { xs: 130, sm: 150 },
+                            '& .MuiOutlinedInput-root': {
+                                backgroundColor: alpha(theme.palette.primary.dark, 0.4),
+                                borderRadius: 2,
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: alpha(theme.palette.secondary.main, 0.3),
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: alpha(theme.palette.secondary.main, 0.5),
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: theme.palette.secondary.main,
+                                },
+                            },
+                            '& .MuiInputLabel-root': {
+                                color: alpha(theme.palette.text.primary, 0.7),
+                                fontSize: '0.85rem',
+                                '&.Mui-focused': {
+                                    color: theme.palette.secondary.main,
+                                },
+                            },
+                            '& .MuiSelect-select': {
+                                py: 1,
+                                fontSize: '0.9rem',
+                            },
+                        }}
+                    >
+                        <InputLabel id="month-select-label">Mes</InputLabel>
+                        <Select
+                            labelId="month-select-label"
+                            value={currentMonth}
+                            onChange={handleMonthChange}
+                            label="Mes"
+                        >
+                            {[
+                                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+                            ].map((month, index) => (
+                                <MenuItem key={index} value={index}>{month}</MenuItem>
+                            ))}
+                            <MenuItem value={12}>Año completo</MenuItem>
+                        </Select>
+                    </FormControl>
+
+                    <FormControl
+                        size="small"
+                        sx={{
+                            minWidth: { xs: 90, sm: 100 },
+                            '& .MuiOutlinedInput-root': {
+                                backgroundColor: alpha(theme.palette.primary.dark, 0.4),
+                                borderRadius: 2,
+                                '& .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: alpha(theme.palette.secondary.main, 0.3),
+                                },
+                                '&:hover .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: alpha(theme.palette.secondary.main, 0.5),
+                                },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                    borderColor: theme.palette.secondary.main,
+                                },
+                            },
+                            '& .MuiInputLabel-root': {
+                                color: alpha(theme.palette.text.primary, 0.7),
+                                fontSize: '0.85rem',
+                                '&.Mui-focused': {
+                                    color: theme.palette.secondary.main,
+                                },
+                            },
+                            '& .MuiSelect-select': {
+                                py: 1,
+                                fontSize: '0.9rem',
+                                fontFamily: tokens.typography.monoFont,
+                                fontWeight: 600,
+                            },
+                        }}
+                    >
+                        <InputLabel id="year-select-label">Año</InputLabel>
+                        <Select
+                            labelId="year-select-label"
+                            value={currentYear}
+                            onChange={handleYearChange}
+                            label="Año"
+                            disabled={availableYears.length === 0}
+                        >
+                            {availableYears.map(year => (
+                                <MenuItem
+                                    key={year}
+                                    value={year}
+                                    sx={{ fontFamily: tokens.typography.monoFont }}
+                                >
+                                    {year}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Box>
             </Paper>
 
             {filteredResults.length === 0 && (
@@ -325,11 +489,10 @@ ${winnerText}`;
             <Grid container spacing={2.5}>
                 {paginatedResults.map(result => {
                     const category = categorizeMatch(result.pair1, result.pair2);
-                    const dateObj = result.date?.toDate ? result.date.toDate() : new Date(result.date);
                     return (
                         <Grid item xs={12} key={result.id}>
-                            <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: theme.shadows[2], '&:hover': {boxShadow: theme.shadows[5]}}}>
-                                {editingId === result.id ? (
+                            {editingId === result.id ? (
+                                <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: theme.shadows[2] }}>
                                     <CardContent sx={{ p: 2 }}>
                                         <Typography variant="h6" gutterBottom>Editando Resultado</Typography>
                                         <TextField
@@ -341,7 +504,7 @@ ${winnerText}`;
                                             onChange={(e) => setEditableResult(prev => ({ ...prev, location: e.target.value }))}
                                             sx={{ mb: 1.5 }}
                                         />
-                                         <TextField
+                                        <TextField
                                             fullWidth
                                             label="Fecha"
                                             type="date"
@@ -391,90 +554,18 @@ ${winnerText}`;
                                             <Button variant="contained" color="primary" onClick={handleSaveEdit}>Guardar</Button>
                                         </Box>
                                     </CardContent>
-                                ) : (
-                                    <>
-                                        {category && (
-                                            <Chip 
-                                                icon={category.icon} 
-                                                label={category.label} 
-                                                size="small"
-                                                sx={{ 
-                                                    m: 1.5, 
-                                                    mb: 0, 
-                                                    backgroundColor: category.color, 
-                                                    color: theme.palette.getContrastText(category.color),
-                                                    fontWeight: 'medium'
-                                                }} 
-                                            />
-                                        )}
-                                        <CardContent sx={{ pt: category ? 1 : 2 }}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                                                <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'medium', color: theme.palette.text.secondary }}>
-                                                    {dayjs(dateObj).format('dddd, D MMMM YYYY')}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {result.location || 'Lugar Desconocido'}
-                                                </Typography>
-                                            </Box>
-                                            
-                                            <TableContainer component={Paper} variant="outlined" sx={{mb:1.5}}>
-                                                <Table size="small">
-                                                    <TableHead>
-                                                        <TableRow>
-                                                            <TableCell sx={{fontWeight:'bold'}}>Pareja</TableCell>
-                                                            {result.sets.map((set, index) => (
-                                                                <TableCell key={index} align="center" sx={{fontWeight:'bold'}}>S{index + 1}</TableCell>
-                                                            ))}
-                                                        </TableRow>
-                                                    </TableHead>
-                                                    <TableBody>
-                                                        <TableRow sx={{ backgroundColor: isWinner('pair1', result.sets) ? theme.palette.success.light+'60' : 'inherit' }}>
-                                                            <TableCell component="th" scope="row">
-                                                                {isWinner('pair1', result.sets) && <EmojiEvents sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', mr: 0.5, fontSize: '1.1rem' }} />}
-                                                                <Typography component="span" variant="body2" sx={{ fontWeight: isWinner('pair1', result.sets) ? 'bold' : 'normal' }}>
-                                                                    {result.pair1?.player1 || 'N/A'} & {result.pair1?.player2 || 'N/A'}
-                                                                </Typography>
-                                                            </TableCell>
-                                                            {result.sets.map((set, index) => (
-                                                                <TableCell key={index} align="center" sx={{ fontWeight: (parseInt(set.pair1Score) > parseInt(set.pair2Score)) ? 'bold' : 'normal'}}>{set.pair1Score ?? 0}</TableCell>
-                                                            ))}
-                                                        </TableRow>
-                                                        <TableRow sx={{ backgroundColor: isWinner('pair2', result.sets) ? theme.palette.success.light+'60' : 'inherit' }}>
-                                                            <TableCell component="th" scope="row">
-                                                                {isWinner('pair2', result.sets) && <EmojiEvents sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', mr: 0.5, fontSize: '1.1rem' }} />}
-                                                                <Typography component="span" variant="body2" sx={{ fontWeight: isWinner('pair2', result.sets) ? 'bold' : 'normal' }}>
-                                                                    {result.pair2?.player1 || 'N/A'} & {result.pair2?.player2 || 'N/A'}
-                                                                </Typography>
-                                                            </TableCell>
-                                                            {result.sets.map((set, index) => (
-                                                                <TableCell key={index} align="center" sx={{ fontWeight: (parseInt(set.pair2Score) > parseInt(set.pair1Score)) ? 'bold' : 'normal'}}>{set.pair2Score ?? 0}</TableCell>
-                                                            ))}
-                                                        </TableRow>
-                                                    </TableBody>
-                                                </Table>
-                                            </TableContainer>
-                                            <Typography variant="caption" display="block" color="text.secondary">
-                                                Añadido por: {result.addedBy || 'N/A'}
-                                                {result.createdAt && ` el ${dayjs(result.createdAt.toDate ? result.createdAt.toDate() : result.createdAt).format('D/MM/YY HH:mm')}`}
-                                            </Typography>
-                                        </CardContent>
-                                        <CardActions sx={{ justifyContent: 'flex-end', pt:0, pb:1, px:1 }}>
-                                            <Tooltip title="Compartir">
-                                                <IconButton size="small" onClick={() => handleShareResult(result)} sx={{ color: theme.palette.success.main }}><ShareIcon fontSize="small"/></IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Clonar">
-                                                <IconButton size="small" onClick={() => handleClone(result)} sx={{ color: theme.palette.info.main }}><ContentCopy fontSize="small"/></IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Editar">
-                                                <IconButton size="small" onClick={() => handleEdit(result)} sx={{ color: theme.palette.warning.dark }}><Edit fontSize="small"/></IconButton>
-                                            </Tooltip>
-                                            <Tooltip title="Eliminar">
-                                                <IconButton size="small" onClick={() => handleDeleteResult(result.id, result)} sx={{ color: theme.palette.error.main }}><DeleteIcon fontSize="small"/></IconButton>
-                                            </Tooltip>
-                                        </CardActions>
-                                    </>
-                                )}
-                            </Card>
+                                </Card>
+                            ) : (
+                                <MatchCard
+                                    result={result}
+                                    category={category}
+                                    isNew={result.id === newResultId}
+                                    onEdit={handleEdit}
+                                    onDelete={handleDeleteResult}
+                                    onClone={handleClone}
+                                    onShare={handleShareResult}
+                                />
+                            )}
                         </Grid>
                     );
                 })}

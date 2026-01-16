@@ -28,25 +28,6 @@ const Layout = ({ children }) => {
         {children}
       </Box>
 
-      <Box
-        component="footer"
-        sx={{
-          position: 'fixed',
-          bottom: 64, // Encima del BottomNav
-          left: 0,
-          right: 0,
-          textAlign: 'center',
-          py: 1,
-          backgroundColor: theme.palette.grey[100],
-          borderTop: `1px solid ${theme.palette.divider}`,
-          fontSize: '0.75rem',
-          color: theme.palette.text.secondary,
-          zIndex: theme.zIndex.appBar - 1,
-        }}
-      >
-        © {new Date().getFullYear()} Made with ❤️ by Alberto Bort
-      </Box>
-
       <BottomNav />
     </Box>
   );

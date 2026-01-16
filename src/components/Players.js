@@ -1,33 +1,39 @@
 // Players.js
-import React, { useState, useEffect, useCallback, useMemo } from 'react'; // useMemo añadido
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Container,
   Typography,
   Box,
   Grid,
   Card,
-  CardContent,
   CardMedia,
   Button,
   Modal,
   Backdrop,
   Fade,
-  IconButton,
   useTheme,
-  Paper,
   Slider,
-  CircularProgress, // <--- IMPORTADO
-  Alert             // <--- IMPORTADO
+  CircularProgress,
+  Alert,
+  Fab,
+  alpha
 } from '@mui/material';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { collection, getDocs } from "firebase/firestore";
-import { db } from '../firebase';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import { useNavigate } from 'react-router-dom';
+
+// Theme tokens
+import { tokens } from '../theme';
 import dayjs from 'dayjs';
 import Cropper from 'react-easy-crop';
+
+// Context
+import { useData } from '../context/DataContext';
+
+// New components
+import PlayerCard from './PlayerCard';
+import PlayerComparison from './PlayerComparison';
+import PlayerCardSkeleton from './skeletons/PlayerCardSkeleton';
 
 const playersInfo = {
   Ricardo: { name: 'Ricardo', image: '/Ricardo.jpg', position: 'Revés', birthDate: '26/11/1994', height: '1.80 m', birthPlace: 'Madrid', country: 'ESP', flag: '/spain_flag.jpg' },
@@ -166,15 +172,14 @@ async function scaleImage(dataURL, maxWidth, maxHeight) {
 
 
 const Players = () => {
-  const [allResults, setAllResults] = useState([]);
+  // Usar datos del contexto global
+  const { results: allResults, loading, error } = useData();
+
   const [playerStats, setPlayerStats] = useState({});
   const [pairStats, setPairStats] = useState({});
-  const [selectedPlayerKey, setSelectedPlayerKey] = useState(null);
+  const [openComparison, setOpenComparison] = useState(false);
   const navigate = useNavigate();
   const theme = useTheme();
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const initialPlayerImages = useMemo(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('playerImages') : null;
@@ -194,35 +199,11 @@ const Players = () => {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-
-  useEffect(() => {
-    const fetchResultsData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const querySnapshot = await getDocs(collection(db, "results"));
-        const fetchedResults = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            ...data,
-            id: doc.id,
-            date: data.date?.toDate ? data.date.toDate() : new Date(data.date)
-          };
-        });
-        const validResults = fetchedResults.filter(result => dayjs(result.date).isValid());
-        setAllResults(validResults);
-      } catch (err) {
-        console.error("Error fetching results:", err);
-        setError("No se pudieron cargar los datos de los jugadores.");
-        setLoading(false); // Asegurar que loading se desactiva en caso de error
-      }
-    };
-    fetchResultsData();
-  }, []);
+  const [statsCalculated, setStatsCalculated] = useState(false);
 
   const calculateAllStats = useCallback((currentResults) => {
     if (!currentResults || currentResults.length === 0) {
-      setPlayerStats({}); setPairStats({}); setLoading(false); return;
+      setPlayerStats({}); setPairStats({}); setStatsCalculated(true); return;
     }
     const stats = {}; const pStats = {};
     Object.keys(playersInfo).forEach(pKey => {
@@ -230,8 +211,8 @@ const Players = () => {
     });
     currentResults.forEach(result => {
       const { pair1, pair2, sets } = result;
-      if (!pair1 || !pair2 || !sets) return; // Skip si faltan datos cruciales
-      const matchPlayers = [pair1.player1, pair1.player2, pair2.player1, pair2.player2].filter(Boolean); // Filtrar nulos/undefined
+      if (!pair1 || !pair2 || !sets) return;
+      const matchPlayers = [pair1.player1, pair1.player2, pair2.player1, pair2.player2].filter(Boolean);
       matchPlayers.forEach(player => {
         if (stats[player]) stats[player].gamesPlayed += 1;
       });
@@ -281,16 +262,17 @@ const Players = () => {
       const { gamesWon, gamesPlayed } = pStats[pairKey];
       pStats[pairKey].efficiency = gamesPlayed > 0 ? parseFloat(((gamesWon / gamesPlayed) * 100).toFixed(1)) : 0;
     });
-    setPlayerStats(stats); setPairStats(pStats); setLoading(false);
+    setPlayerStats(stats); setPairStats(pStats); setStatsCalculated(true);
   }, []);
 
+  // Calcular stats cuando los datos esten disponibles
   useEffect(() => {
-    if (allResults.length > 0 || error) { // Si hay error, también paramos la carga
+    if (!loading && allResults.length > 0 && !statsCalculated) {
       calculateAllStats(allResults);
-    } else if (!loading && allResults.length === 0 && !error) { // Si terminó de cargar y no hay resultados ni error
-      setPlayerStats({}); setPairStats({}); setLoading(false);
+    } else if (!loading && allResults.length === 0 && !statsCalculated) {
+      setPlayerStats({}); setPairStats({}); setStatsCalculated(true);
     }
-  }, [allResults, calculateAllStats, loading, error]);
+  }, [allResults, calculateAllStats, loading, statsCalculated]);
 
   useEffect(() => {
     localStorage.setItem('playerImages', JSON.stringify(playerImages));
@@ -324,12 +306,7 @@ const Players = () => {
     return pair.gamesWon === firstPair.gamesWon && parseFloat(pair.efficiency) === parseFloat(firstPair.efficiency);
   };
 
-  const handleCardClick = (playerKey) => {
-    setSelectedPlayerKey(prevKey => (prevKey === playerKey ? null : playerKey));
-  };
-
-  const handleImageEditClick = (e, playerKey) => {
-    e.stopPropagation();
+  const handleImageEditClick = (playerKey) => {
     setSelectedPlayerForImageChange(playerKey);
     setImageSrc(playerImages[playerKey] || playersInfo[playerKey].image);
     setOpenModal(true);
@@ -368,8 +345,50 @@ const Players = () => {
     setCroppedAreaPixels(null); setZoom(1); setCrop({ x: 0, y: 0 });
   };
 
-  if (loading) {
-    return <Container sx={{ py: 4, textAlign: 'center' }}><CircularProgress /><Typography sx={{ mt: 2, color: "text.secondary" }}>Cargando datos de jugadores...</Typography></Container>;
+  if (loading || !statsCalculated) {
+    return (
+      <Container sx={{ py: 3 }}>
+        <Box
+          sx={{
+            mb: 4,
+            textAlign: 'center',
+            position: 'relative',
+            py: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{
+              fontFamily: tokens.typography.displayFont,
+              letterSpacing: '0.1em',
+              color: theme.palette.secondary.main,
+              position: 'relative',
+              display: 'inline-block',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '60%',
+                height: '3px',
+                background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+              },
+            }}
+          >
+            Fichas de Jugadores
+          </Typography>
+        </Box>
+        <Grid container spacing={3}>
+          {[1, 2, 3, 4].map((index) => (
+            <Grid item xs={12} sm={6} md={3} key={index}>
+              <PlayerCardSkeleton />
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+    );
   }
   if (error) {
     return <Container sx={{ py: 4, textAlign: 'center' }}><Alert severity="error">{error}</Alert></Container>;
@@ -406,67 +425,125 @@ const Players = () => {
         </Fade>
       </Modal>
 
-      <Paper elevation={0} sx={{ backgroundColor: theme.palette.common.black, color: theme.palette.common.white, padding: theme.spacing(1.5, 2), textAlign: 'center', mb: 4, borderRadius: "8px" }}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>Fichas de Jugadores</Typography>
-      </Paper>
+      <Box
+        sx={{
+          mb: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h4"
+          component="h1"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.1em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Fichas de Jugadores
+        </Typography>
+      </Box>
+
+      {/* Botón flotante para comparar jugadores */}
+      <Fab
+        color="primary"
+        aria-label="comparar jugadores"
+        onClick={() => setOpenComparison(true)}
+        sx={{
+          position: 'fixed',
+          bottom: 100,
+          right: 24,
+          zIndex: 1000,
+          backgroundColor: theme.palette.common.black,
+          color: theme.palette.common.white,
+          boxShadow: theme.shadows[6],
+          '&:hover': {
+            backgroundColor: theme.palette.grey[800],
+            boxShadow: theme.shadows[8],
+          },
+        }}
+      >
+        <CompareArrowsIcon />
+      </Fab>
+
+      {/* Modal de comparación */}
+      <PlayerComparison
+        open={openComparison}
+        onClose={() => setOpenComparison(false)}
+        playersInfo={playersInfo}
+        playerStats={playerStats}
+        playerImages={playerImages}
+        allResults={allResults}
+      />
+
       <Grid container spacing={3}>
-        {Object.keys(playersInfo).map((playerKey) => {
+        {Object.keys(playersInfo).map((playerKey, index) => {
           const player = playersInfo[playerKey];
           const stats = playerStats[playerKey] || { gamesPlayed: 0, gamesWon: 0, gamesLost: 0, consecutiveWins: 0, efficiency: 0 };
-          const isSelected = selectedPlayerKey === playerKey;
+          const rank = rankedPlayers.findIndex(p => p.name === player.name) + 1;
 
           return (
             <Grid item xs={12} sm={6} md={3} key={playerKey}>
-              <Card
-                onClick={() => handleCardClick(playerKey)}
-                sx={{
-                  height: '100%', display: 'flex', flexDirection: 'column',
-                  borderRadius: 2, transition: 'box-shadow 0.3s ease, transform 0.3s ease',
-                  boxShadow: isSelected ? theme.shadows[8] : theme.shadows[2],
-                  transform: isSelected ? 'translateY(-4px)' : 'none',
-                  '&:hover': { boxShadow: theme.shadows[6], cursor: 'pointer' },
-                }}
-              >
-                <Box sx={{ position: 'relative', width: '100%', pt: '100%' }}>
-                  <CardMedia component="img" image={playerImages[playerKey] || player.image} alt={player.name} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <IconButton size="small" onClick={(e) => handleImageEditClick(e, playerKey)} sx={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', color: 'white', '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' } }}>
-                    <PhotoCameraIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-                <CardContent sx={{ textAlign: 'center', flexGrow: 1, p: 2, backgroundColor: isSelected ? theme.palette.grey[100] : 'transparent' }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', color: theme.palette.common.black }}>
-                      {player.name}
-                    </Typography>
-                    <Box component="img" src={player.flag} alt={`${player.country} flag`} sx={{ height: 20, ml: 1, borderRadius: '2px', boxShadow: theme.shadows[1] }} />
-                  </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}> {player.position} </Typography>
-                  {isSelected && (
-                    <Box sx={{ mt: 1.5, textAlign: 'left', fontSize: '0.875rem' }}>
-                      <Typography variant="caption" display="block">Nacimiento: {player.birthDate}</Typography>
-                      <Typography variant="caption" display="block">Altura: {player.height}</Typography>
-                      <Typography variant="caption" display="block">Origen: {player.birthPlace}</Typography>
-                      <hr style={{ margin: '8px 0', border: 0, borderTop: `1px solid ${theme.palette.divider}` }} />
-                      <Typography variant="body2" sx={{ fontWeight: '500', mt: 1, color: theme.palette.common.black }}>Estadísticas:</Typography>
-                      <Typography variant="caption" display="block" sx={{ color: theme.palette.text.secondary }}>Jugados: {stats.gamesPlayed}</Typography>
-                      <Typography variant="caption" display="block" sx={{ color: theme.palette.text.secondary }}>Ganados: {stats.gamesWon} / Perdidos: {stats.gamesLost}</Typography>
-                      <Typography variant="caption" display="block" sx={{ color: theme.palette.text.secondary }}>Eficiencia: <strong style={{ color: theme.palette.primary.main }}>{stats.efficiency}%</strong></Typography>
-                      <Typography variant="caption" display="block" sx={{ color: theme.palette.text.secondary }}>Racha Actual: {stats.consecutiveWins}</Typography>
-                    </Box>
-                  )}
-                  <IconButton size="small" sx={{ color: isSelected ? theme.palette.primary.main : theme.palette.grey[400], transform: isSelected ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', mt: isSelected ? 1 : 0.5 }}>
-                    <ArrowDropDownIcon />
-                  </IconButton>
-                </CardContent>
-              </Card>
+              <PlayerCard
+                player={player}
+                playerKey={playerKey}
+                stats={stats}
+                image={playerImages[playerKey] || player.image}
+                rank={rank}
+                onImageEdit={handleImageEditClick}
+                allResults={allResults}
+              />
             </Grid>
           );
         })}
       </Grid>
 
-      <Paper elevation={0} sx={{ backgroundColor: theme.palette.common.black, color: theme.palette.common.white, padding: theme.spacing(1.5, 2), textAlign: 'center', my: 4, borderRadius: "8px" }}>
-        <Typography variant="h4" component="h2" sx={{ fontWeight: 'bold' }}>Ranking Individual</Typography>
-      </Paper>
+      <Box
+        sx={{
+          my: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h5"
+          component="h2"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.08em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Ranking Individual
+        </Typography>
+      </Box>
       {rankedPlayers.length === 0 ? (
         <Typography sx={{ textAlign: 'center', width: '100%', color: 'text.secondary', mb: 3 }}>No hay suficientes datos para el ranking.</Typography>
       ) : (
@@ -477,19 +554,19 @@ const Players = () => {
             return (
               <Grid item xs={12} key={`${player.name}-rank-${index}`}>
                 <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderRadius: 2, backgroundColor: (isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 ? theme.palette.success.light + '30' : theme.palette.background.paper, borderLeft: (isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 ? `5px solid ${theme.palette.success.main}` : `5px solid transparent` }}>
-                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.common.black, mr: 1.5 }}>
+                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.text.primary, mr: 1.5 }}>
                     {index + 1}°
                   </Typography>
-                  <CardMedia component="img" sx={{ width: 45, height: 45, borderRadius: '50%', mr: 1.5, border: `2px solid ${theme.palette.grey[300]}` }} image={player.image} alt={player.name} />
+                  <CardMedia component="img" sx={{ width: 45, height: 45, borderRadius: '50%', mr: 1.5, border: `2px solid ${theme.palette.success.main}` }} image={player.image} alt={player.name} />
                   <Box flexGrow={1}>
-                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.common.black }}>
+                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
                       {player.name} {(isFirst || tiedWithFirstCurrent) && player.gamesPlayed > 0 && <EmojiEventsIcon sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', ml: 0.5, fontSize: '1.2rem' }} />}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">{playersInfo[player.name]?.country}</Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{playersInfo[player.name]?.country}</Typography>
                   </Box>
                   <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>{player.efficiency}%</Typography>
-                    <Typography variant="caption" color="text.secondary">{player.gamesWon} G / {player.gamesPlayed} J</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.success.main }}>{player.efficiency}%</Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{player.gamesWon} G / {player.gamesPlayed} J</Typography>
                   </Box>
                 </Card>
               </Grid>
@@ -498,9 +575,38 @@ const Players = () => {
         </Grid>
       )}
 
-      <Paper elevation={0} sx={{ backgroundColor: theme.palette.common.black, color: theme.palette.common.white, padding: theme.spacing(1.5, 2), textAlign: 'center', my: 4, borderRadius: "8px" }}>
-        <Typography variant="h4" component="h2" sx={{ fontWeight: 'bold' }}>Ranking por Parejas</Typography>
-      </Paper>
+      <Box
+        sx={{
+          my: 4,
+          textAlign: 'center',
+          position: 'relative',
+          py: 2,
+        }}
+      >
+        <Typography
+          variant="h5"
+          component="h2"
+          sx={{
+            fontFamily: tokens.typography.displayFont,
+            letterSpacing: '0.08em',
+            color: theme.palette.secondary.main,
+            position: 'relative',
+            display: 'inline-block',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '60%',
+              height: '3px',
+              background: `linear-gradient(90deg, transparent 0%, ${theme.palette.secondary.main} 50%, transparent 100%)`,
+            },
+          }}
+        >
+          Ranking por Parejas
+        </Typography>
+      </Box>
       {rankedPairs.length === 0 ? (
         <Typography sx={{ textAlign: 'center', width: '100%', color: 'text.secondary', mb: 3 }}>No hay suficientes datos para el ranking de parejas.</Typography>
       ) : (
@@ -511,17 +617,17 @@ const Players = () => {
             return (
               <Grid item xs={12} key={`pair-rank-${index}`}>
                 <Card variant="outlined" sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderRadius: 2, backgroundColor: (isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 ? theme.palette.success.light + '30' : theme.palette.background.paper, borderLeft: (isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 ? `5px solid ${theme.palette.success.main}` : `5px solid transparent` }}>
-                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.common.black, mr: 1.5 }}>
+                  <Typography variant="h6" component="div" sx={{ width: 40, textAlign: 'center', fontWeight: 'bold', color: theme.palette.text.primary, mr: 1.5 }}>
                     {index + 1}°
                   </Typography>
                   <Box flexGrow={1}>
-                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.common.black }}>
+                    <Typography variant="subtitle1" component="div" sx={{ fontWeight: 'bold', color: theme.palette.text.primary }}>
                       {pair.players[0]} & {pair.players[1]} {(isFirst || tiedWithFirstCurrent) && pair.gamesPlayed > 0 && <EmojiEventsIcon sx={{ color: theme.palette.warning.main, verticalAlign: 'middle', ml: 0.5, fontSize: '1.2rem' }} />}
                     </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>{pair.efficiency}%</Typography>
-                    <Typography variant="caption" color="text.secondary">{pair.gamesWon} G / {pair.gamesPlayed} J</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: theme.palette.success.main }}>{pair.efficiency}%</Typography>
+                    <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>{pair.gamesWon} G / {pair.gamesPlayed} J</Typography>
                   </Box>
                 </Card>
               </Grid>
@@ -529,27 +635,6 @@ const Players = () => {
           })}
         </Grid>
       )}
-
-      <Box sx={{ textAlign: 'center', mt: 5, mb: 3 }}>
-        <Button
-          variant="contained"
-          onClick={() => navigate('/')}
-          sx={{
-            backgroundColor: theme.palette.common.black, // Botón negro
-            color: theme.palette.common.white,           // Texto blanco
-            borderRadius: '30px',
-            padding: '10px 30px',
-            textTransform: 'none',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            '&:hover': {
-              backgroundColor: theme.palette.grey[800], // Hover gris oscuro
-            },
-          }}
-        >
-          Volver a la Pantalla Principal
-        </Button>
-      </Box>
     </Container>
   );
 };
